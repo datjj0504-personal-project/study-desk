@@ -1,3 +1,4 @@
+import { BackendStatus } from "../components/BackendStatus";
 import { PlaceholderCard } from "../components/PlaceholderCard";
 
 export function DashboardPage() {
@@ -7,6 +8,9 @@ export function DashboardPage() {
       <p className="mt-1 text-slate-400">
         Your personal study companion. Features below are not implemented yet.
       </p>
+      <div className="mt-2">
+        <BackendStatus />
+      </div>
       <div className="mt-6 grid grid-cols-1 gap-4 xl:grid-cols-3">
         <PlaceholderCard
           title="Recent Notes"

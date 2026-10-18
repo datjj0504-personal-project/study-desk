@@ -12,3 +12,20 @@
 10. Ask for clarification when a decision could materially affect architecture or existing user work.
 
 Follow [architecture-rules.md](architecture-rules.md) and [coding-rules.md](coding-rules.md). Never claim a command succeeded unless you ran it. Do not commit or push unless asked.
+
+## Mandatory Project Progress Tracking
+
+Before starting any task, read `ai/PROJECT_STATUS.md` if it exists. Verify the repository state before relying on its contents.
+
+After every task, update `ai/PROJECT_STATUS.md` to reflect:
+- Actual implementation progress
+- Completed and remaining work
+- Validation results
+- Known issues and blockers
+- The next recommended task
+
+Never mark a task as completed without satisfying its acceptance criteria. If a task is partially implemented, blocked, or untested, record that explicitly.
+
+Keep task IDs stable and preserve the completed task history. Do not replace actual implementation evidence with assumptions based on plans, directory names, or previous AI responses.
+
+Every final task report must state the next task ID and explain what should be done next.
