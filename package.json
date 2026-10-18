@@ -1,0 +1,9 @@
+{
+  "name": "studydesk",
+  "private": true,
+  "description": "Repository root. The frontend lives in frontend/ and is built by Wails.",
+  "scripts": {
+    "dev": "wails dev",
+    "build": "wails build"
+  }
+}
