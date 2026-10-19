@@ -17,4 +17,4 @@ Use Wails (Go backend + WebView2 frontend), React with TypeScript and Tailwind C
 ## Consequences
 - Small native binary and Go-based testable logic.
 - Requires the WebView2 runtime and Wails tooling on developer machines.
-- SQLite driver choice (CGO vs pure Go) is still open; see [database design](../../docs/02-design/database-design.md).
+- The SQLite driver choice is recorded in [ADR 0002](0002-use-pure-go-sqlite-driver.md).

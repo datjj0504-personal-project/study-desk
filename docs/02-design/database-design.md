@@ -38,4 +38,4 @@ CREATE TABLE settings (
 );
 ```
 
-Open questions: full-text search (FTS5) for notes; whether a driver without CGO (e.g. `modernc.org/sqlite`) is preferred for simpler Windows builds. Record the outcome as an [ADR](../../ai/decisions/README.md).
+The application uses the pure-Go [`modernc.org/sqlite`](https://pkg.go.dev/modernc.org/sqlite) driver to avoid requiring a C toolchain for Windows builds; see [ADR 0002](../../ai/decisions/0002-use-pure-go-sqlite-driver.md). Full-text search (FTS5) for notes remains an open design question.

@@ -17,7 +17,7 @@ Single source of truth for progress. Last updated: 2026-10-19 (P1-005 marked don
 | Backend (Go) | IN_PROGRESS | `main.go`, `app.go` (`App` with `GetAppInfo`). No domain code. |
 | Frontend | IN_PROGRESS | UI shell with sidebar and placeholder pages; dashboard shows backend connection status. No feature logic. |
 | Wails integration | DONE | Wails CLI v2.17.0, `wails doctor` passes, `wails build` succeeds, bindings generated, `GetAppInfo` round trip accepted by the user. |
-| Database | NOT_STARTED | |
+| Database | IN_PROGRESS | Pure-Go SQLite driver selected and integrated; initialization and migrations remain. |
 | Notes feature | NOT_STARTED | Placeholder UI only. |
 | Timer and stopwatch | NOT_STARTED | Placeholder UI only. |
 | Testing | IN_PROGRESS | Initial Go and frontend tests are in place; expand coverage as features land. |
@@ -55,20 +55,26 @@ Single source of truth for progress. Last updated: 2026-10-19 (P1-005 marked don
 - **Validation:** `gofmt -l app_test.go` clean; `go vet ./...` clean; `go test ./...` passed; `cd frontend; npm run test` passed (2 files, 4 tests); `cd frontend; npm run build` passed (`tsc --noEmit` and Vite production build).
 - **Files:** `app_test.go`, `frontend/package.json`, `frontend/package-lock.json`, `frontend/vite.config.ts`, `frontend/src/{services/appInfo.ts,services/appInfo.test.ts,utils/errors.ts,components/BackendStatus.test.tsx}`, `README.md`.
 
+### P2-001: Select and integrate an SQLite driver
+- **Completed:** 2026-10-19
+- **Summary:** Selected `modernc.org/sqlite` v1.60.1, a pure-Go `database/sql` driver, to avoid a separate C toolchain requirement for Windows builds. Added `internal/storage.OpenSQLite` and a test that opens an in-memory database and queries the SQLite version. Documented the decision and tradeoffs in ADR 0002 and updated the database design.
+- **Validation:** `go test ./...` and `go vet ./...` passed; a Windows/amd64 production-tag build succeeded with `CGO_ENABLED=0`.
+- **Files:** `go.mod`, `go.sum`, `internal/storage/{sqlite.go,sqlite_test.go}`, `ai/decisions/{0002-use-pure-go-sqlite-driver.md,README.md,0001-use-wails-go-react-sqlite.md}`, `docs/02-design/database-design.md`.
+
 ## D. Current Task
 
 No task is currently in progress.
 
 ## E. Remaining Tasks and Roadmap
 
-Statuses: NOT_STARTED unless noted. P1-001 through P1-005 are complete.
+Statuses: NOT_STARTED unless noted. P1-001 through P1-005 and P2-001 are complete.
 
 **Phase 1 — Foundation**
 - P1-004: DONE (see C).
 - P1-005: DONE (see C).
 
 **Phase 2 — Local Storage**
-- P2-001: Select and integrate an SQLite driver (CGO vs pure Go; write ADR). Depends on: P1-002.
+- P2-001: DONE (see C).
 - P2-002: Database initialization and schema migrations. Depends on: P2-001.
 - P2-003: Persistence and storage tests. Depends on: P2-002.
 
@@ -110,18 +116,18 @@ Statuses: NOT_STARTED unless noted. P1-001 through P1-005 are complete.
 - Test coverage is currently limited to `GetAppInfo`, error-message conversion, and backend connection status; feature-specific tests remain future work.
 - Rendered UI has not been visually verified.
 - Root `package.json` is a minimal stub with `wails` scripts only.
-- SQLite driver choice is open (see [database design](../docs/02-design/database-design.md)).
-- Decisions: [ADR 0001](decisions/0001-use-wails-go-react-sqlite.md). The Go package at the repo root is `main` (Wails convention).
+- SQLite uses `modernc.org/sqlite`, a pure-Go driver (see [ADR 0002](decisions/0002-use-pure-go-sqlite-driver.md)).
+- Decisions: [ADR 0001](decisions/0001-use-wails-go-react-sqlite.md), [ADR 0002](decisions/0002-use-pure-go-sqlite-driver.md). The Go package at the repo root is `main` (Wails convention).
 - Deferred: client-side routing library (simple state-based navigation for now); theme switching.
 
 ## G. Next Recommended Task
 
-**P2-001: Select and integrate an SQLite driver.**
+**P2-002: Database initialization and schema migrations.**
 
-- **Why next:** Database initialization and persistence are blocked on the driver decision.
-- **Prerequisites:** P1-002 done.
-- **Steps (P2-001):** Compare CGO and pure-Go SQLite options against the Windows desktop requirements, select and integrate a driver, and record the rationale in an ADR.
-- **Acceptance:** The driver is added to the Go module and the decision is documented in `ai/decisions/`.
+- **Why next:** The driver is selected and integrated; database initialization and versioned schema migrations are needed before persistence can be built.
+- **Prerequisites:** P2-001 done.
+- **Steps (P2-002):** Define the app-data database location, initialize SQLite with appropriate connection settings, and apply versioned migrations with explicit error handling.
+- **Acceptance:** The app can initialize its local database and apply the schema from `migrations/` reliably.
 
 ## H. Instructions for Future AI Sessions
 
