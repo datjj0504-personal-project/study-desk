@@ -58,6 +58,8 @@ go test ./...
 cd frontend; npm run test; npm run build
 ```
 
+Frontend tests use Vitest and React Testing Library for service utilities and UI components.
+
 Strategy: [testing strategy](docs/04-testing/testing-strategy.md).
 
 ## Build

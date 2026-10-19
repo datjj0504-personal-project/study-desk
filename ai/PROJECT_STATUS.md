@@ -1,6 +1,6 @@
 # StudyDesk Project Status
 
-Single source of truth for progress. Last updated: 2026-10-18 (P1-004 marked done).
+Single source of truth for progress. Last updated: 2026-10-19 (P1-005 marked done).
 
 ## A. Project Overview
 
@@ -20,7 +20,7 @@ Single source of truth for progress. Last updated: 2026-10-18 (P1-004 marked don
 | Database | NOT_STARTED | |
 | Notes feature | NOT_STARTED | Placeholder UI only. |
 | Timer and stopwatch | NOT_STARTED | Placeholder UI only. |
-| Testing | NOT_STARTED | No Go or frontend tests; only type check and build. |
+| Testing | IN_PROGRESS | Initial Go and frontend tests are in place; expand coverage as features land. |
 | Build and packaging | IN_PROGRESS | `wails build` produced `build/bin/studydesk.exe`, which launches. No installer. |
 
 ## C. Completed Tasks
@@ -49,17 +49,23 @@ Single source of truth for progress. Last updated: 2026-10-18 (P1-004 marked don
 - **Validation:** `gofmt -l .` clean; `go vet ./...` clean; `wails build` succeeded; exe launched (process alive 6 s, title `StudyDesk`). The on-screen result was confirmed manually by the user (not by the AI) before marking done.
 - **Files:** `app.go`, `frontend/src/{services/appInfo.ts,hooks/useAppInfo.ts,components/BackendStatus.tsx,pages/DashboardPage.tsx,vite-env.d.ts}`, `.gitignore`.
 
+### P1-005: Add initial automated tests and development validation
+- **Completed:** 2026-10-19
+- **Summary:** Added a Go test for `GetAppInfo`, Vitest and React Testing Library with a jsdom environment, tests for `toErrorMessage` and the `BackendStatus` success/error states using a mocked service, and a frontend `test` script. Documented frontend test tooling in the README.
+- **Validation:** `gofmt -l app_test.go` clean; `go vet ./...` clean; `go test ./...` passed; `cd frontend; npm run test` passed (2 files, 4 tests); `cd frontend; npm run build` passed (`tsc --noEmit` and Vite production build).
+- **Files:** `app_test.go`, `frontend/package.json`, `frontend/package-lock.json`, `frontend/vite.config.ts`, `frontend/src/{services/appInfo.ts,services/appInfo.test.ts,utils/errors.ts,components/BackendStatus.test.tsx}`, `README.md`.
+
 ## D. Current Task
 
 No task is currently in progress.
 
 ## E. Remaining Tasks and Roadmap
 
-Statuses: NOT_STARTED unless noted. Roadmap unchanged from the plan, except P1-002 and P1-003 are done.
+Statuses: NOT_STARTED unless noted. P1-001 through P1-005 are complete.
 
 **Phase 1 — Foundation**
 - P1-004: DONE (see C).
-- P1-005: Add initial automated tests and development validation. Depends on: P1-004. Done when: `go test ./...` and a frontend test runner execute at least one real test each.
+- P1-005: DONE (see C).
 
 **Phase 2 — Local Storage**
 - P2-001: Select and integrate an SQLite driver (CGO vs pure Go; write ADR). Depends on: P1-002.
@@ -101,7 +107,7 @@ Statuses: NOT_STARTED unless noted. Roadmap unchanged from the plan, except P1-0
 - `frontend/wailsjs/` is git-ignored and generated; a fresh clone needs `wails dev`, `wails build`, or `wails generate module` before `npm run build` can type-check `services/appInfo.ts`.
 - `build/` now contains CLI-generated icon and Windows manifest (previously missing).
 - `frontend/package.json.md5` is a Wails artifact and is git-ignored.
-- No Go or frontend tests exist.
+- Test coverage is currently limited to `GetAppInfo`, error-message conversion, and backend connection status; feature-specific tests remain future work.
 - Rendered UI has not been visually verified.
 - Root `package.json` is a minimal stub with `wails` scripts only.
 - SQLite driver choice is open (see [database design](../docs/02-design/database-design.md)).
@@ -110,16 +116,12 @@ Statuses: NOT_STARTED unless noted. Roadmap unchanged from the plan, except P1-0
 
 ## G. Next Recommended Task
 
-**P1-005: Add initial automated tests and development validation.**
+**P2-001: Select and integrate an SQLite driver.**
 
-- **Why next:** it adds the first tests and is a dependency for P6-004.
-- **Prerequisites:** P1-004 done.
-- **Steps (P1-005):**
-  1. Add a Go test for `GetAppInfo` (`app_test.go`).
-  2. Add Vitest and React Testing Library to `frontend/`; test `toErrorMessage` and `BackendStatus` with a mocked `services/appInfo`.
-  3. Add `test` scripts and document them in the README.
-- **Acceptance:** `go test ./...` and `npm run test` run at least one real passing test each.
-- **Validation:** `gofmt -l .`, `go vet ./...`, `go test ./...`, `cd frontend; npm run test; npm run build`.
+- **Why next:** Database initialization and persistence are blocked on the driver decision.
+- **Prerequisites:** P1-002 done.
+- **Steps (P2-001):** Compare CGO and pure-Go SQLite options against the Windows desktop requirements, select and integrate a driver, and record the rationale in an ADR.
+- **Acceptance:** The driver is added to the Go module and the decision is documented in `ai/decisions/`.
 
 ## H. Instructions for Future AI Sessions
 
