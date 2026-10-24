@@ -1,6 +1,6 @@
 # StudyDesk Project Status
 
-Single source of truth for progress. Last updated: 2026-10-24 (P4-007 marked done).
+Single source of truth for progress. Last updated: 2026-10-24 (P5-001 marked done).
 
 ## A. Project Overview
 
@@ -19,6 +19,7 @@ Single source of truth for progress. Last updated: 2026-10-24 (P4-007 marked don
 | Wails integration | DONE | Wails CLI v2.17.0, `wails doctor` passes, `wails build` succeeds, bindings generated, `GetAppInfo` round trip accepted by the user. |
 | Database | DONE | Pure-Go SQLite driver, app-data initialization, and versioned schema migrations are implemented. |
 | Notes feature | DONE | Note CRUD, autosave, title/body search, subject organization, and feature tests are implemented. |
+| Study sessions | IN_PROGRESS | Session model, validation, and SQLite create/read/list persistence are implemented; timer recording and UI remain. |
 | Timer and stopwatch | IN_PROGRESS | Pomodoro and stopwatch controls, configurable persisted durations, completion notifications, restart recovery, and elapsed-time handling across sleep are implemented. |
 | Testing | IN_PROGRESS | Go storage/domain and frontend service/page tests are in place; expand coverage as features land. |
 | Build and packaging | IN_PROGRESS | `wails build` produced `build/bin/studydesk.exe`, which launches. No installer. |
@@ -139,13 +140,19 @@ Single source of truth for progress. Last updated: 2026-10-24 (P4-007 marked don
 - **Validation:** `go test ./... -count=1`, `go test ./internal/timer -cover` (91.7%), `go test -race ./internal/timer ./internal/storage`, `go vet ./...`, `go build ./...`, `frontend: npm run test` (9 files, 32 tests), `frontend: npm run build`, `wails build`, and `git diff --check` passed.
 - **Files:** `internal/timer/{timer.go,timer_test.go,README.md}`, `frontend/src/pages/TimerPage.test.tsx`, `docs/04-testing/testing-strategy.md`, `ai/PROJECT_STATUS.md`.
 
+### P5-001: Session model and persistence
+- **Completed:** 2026-10-24
+- **Summary:** Added a Wails-independent study session model with kinds, optional subject/note, start/end timestamps, whole-second duration, and validation. Implemented SQLite create, get-by-ID, and newest-first list operations using the existing sessions table, including optional-subject foreign-key behavior and persistence across database reopen.
+- **Validation:** `go test ./... -count=1`, `go test -race ./internal/study ./internal/storage`, `go vet ./...`, `go build ./...`, and `git diff --check` passed.
+- **Files:** `internal/study/{session.go,repository.go,session_test.go,README.md}`, `internal/storage/{session_repository.go,session_repository_test.go,README.md}`, `docs/02-design/database-design.md`, `ai/PROJECT_STATUS.md`.
+
 ## D. Current Task
 
 No task is currently in progress.
 
 ## E. Remaining Tasks and Roadmap
 
-Statuses: NOT_STARTED unless noted. P1-001 through P1-005, P2-001 through P2-003, P3-001 through P3-006, and P4-001 through P4-007 are complete.
+Statuses: NOT_STARTED unless noted. P1-001 through P1-005, P2-001 through P2-003, P3-001 through P3-006, P4-001 through P4-007, and P5-001 are complete.
 
 **Phase 1 — Foundation**
 - P1-004: DONE (see C).
@@ -174,7 +181,7 @@ Statuses: NOT_STARTED unless noted. P1-001 through P1-005, P2-001 through P2-003
 - P4-007: DONE — Timer tests and validation. (see C)
 
 **Phase 5 — Study Tracking**
-- P5-001: Session model and persistence. Depends on: P2-002.
+- P5-001: DONE — Session model and persistence. (see C)
 - P5-002: Record completed sessions. Depends on: P5-001, P4-002.
 - P5-003: Basic statistics. Depends on: P5-002.
 - P5-004: Session history and tests. Depends on: P5-002.
@@ -200,11 +207,11 @@ Statuses: NOT_STARTED unless noted. P1-001 through P1-005, P2-001 through P2-003
 
 ## G. Next Recommended Task
 
-**P4-003: Stopwatch.**
+**P5-002: Record completed sessions.**
 
-- **Why next:** The shared timing state engine and app integration are ready; implement stopwatch controls and state exposure before building the combined timer UI.
-- **Prerequisites:** P4-001 done.
-- **Acceptance:** Expose start, pause, resume, reset, and elapsed state for the stopwatch through the app.
+- **Why next:** Session model and persistence are implemented; recording completed focus timer and stopwatch sessions will connect study tracking to existing timer behavior.
+- **Prerequisites:** P5-001 and P4-002 done.
+- **Acceptance:** Persist completed focus timer and stopwatch sessions with measured start/end times, duration, and optional subject/note.
 
 ## H. Instructions for Future AI Sessions
 
