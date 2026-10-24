@@ -16,6 +16,7 @@
 
 - Vitest and React Testing Library for components, hooks, and utils.
 - Mock `src/services/` rather than Wails bindings.
+- App composition tests cover critical navigation and preference flows across the sidebar, settings page, and application state.
 - Checks: type check (`tsc --noEmit`), tests, and `npm run build`.
 
 ## Manual checks

@@ -1,6 +1,6 @@
 # StudyDesk Project Status
 
-Single source of truth for progress. Last updated: 2026-10-24 (P6-002 marked done).
+Single source of truth for progress. Last updated: 2026-10-24 (P6-003 marked done).
 
 ## A. Project Overview
 
@@ -23,7 +23,7 @@ Single source of truth for progress. Last updated: 2026-10-24 (P6-002 marked don
 | Timer and stopwatch | IN_PROGRESS | Pomodoro and stopwatch controls, configurable persisted durations, completion notifications, restart recovery, and elapsed-time handling across sleep are implemented. |
 | User preferences | DONE | Timer settings and system/light/dark theme preferences persist locally; the selected theme is applied across the UI. |
 | Error recovery UX | DONE | Notes loading and preference initialization failures remain distinct from empty/success states and offer retry actions. |
-| Testing | IN_PROGRESS | Go storage/domain and frontend service/page tests are in place; expand coverage as features land. |
+| Testing | DONE | Go unit/integration suites, race checks, vet/build, frontend suite, and production type/build checks pass; App preference/navigation regression coverage is included. |
 | Build and packaging | IN_PROGRESS | `wails build` produced `build/bin/studydesk.exe`, which launches. No installer. |
 
 ## C. Completed Tasks
@@ -178,13 +178,19 @@ Single source of truth for progress. Last updated: 2026-10-24 (P6-002 marked don
 - **Validation:** `frontend: npm run test` (14 files, 46 tests), `frontend: npm run build`, and `git diff --check` passed.
 - **Files:** `frontend/src/{App.tsx,App.test.tsx,pages/NotesPage.tsx,pages/NotesPage.test.tsx}`, `ai/PROJECT_STATUS.md`.
 
+### P6-003: Integration and regression testing
+- **Completed:** 2026-10-24
+- **Summary:** Added an App-level integration regression covering the actual sidebar-to-Settings navigation path, loading the persisted theme, saving a new selection through the settings service, and applying it to the document root. Existing App startup retry tests continue to verify independent preference failures and recovery.
+- **Validation:** `go test ./... -count=1`, `go test -race ./...`, `go vet ./...`, `go build ./...`, `frontend: npm run test` (14 files, 47 tests), `frontend: npm run build`, and `git diff --check` passed.
+- **Files:** `frontend/src/App.test.tsx`, `ai/PROJECT_STATUS.md`.
+
 ## D. Current Task
 
 No task is currently in progress.
 
 ## E. Remaining Tasks and Roadmap
 
-Statuses: NOT_STARTED unless noted. P1-001 through P1-005, P2-001 through P2-003, P3-001 through P3-006, P4-001 through P4-007, P5-001 through P5-004, and P6-001 through P6-002 are complete.
+Statuses: NOT_STARTED unless noted. P1-001 through P1-005, P2-001 through P2-003, P3-001 through P3-006, P4-001 through P4-007, P5-001 through P5-004, and P6-001 through P6-003 are complete.
 
 **Phase 1 — Foundation**
 - P1-004: DONE (see C).
@@ -221,7 +227,7 @@ Statuses: NOT_STARTED unless noted. P1-001 through P1-005, P2-001 through P2-003
 **Phase 6 — Polish and Release**
 - P6-001: DONE — Settings and theme preferences (see C).
 - P6-002: DONE — Error handling and UX improvements (see C).
-- P6-003: Integration and regression testing.
+- P6-003: DONE — Integration and regression testing (see C).
 - P6-004: Windows production builds (`wails build`). Depends on: P1-005.
 - P6-005: Install, backup, and release documentation.
 
@@ -230,7 +236,7 @@ Statuses: NOT_STARTED unless noted. P1-001 through P1-005, P2-001 through P2-003
 - `frontend/wailsjs/` is git-ignored and generated; a fresh clone needs `wails dev`, `wails build`, or `wails generate module` before `npm run build` can type-check `services/appInfo.ts`.
 - `build/` now contains CLI-generated icon and Windows manifest (previously missing).
 - `frontend/package.json.md5` is a Wails artifact and is git-ignored.
-- Automated coverage includes SQLite persistence, note CRUD, frontend service wrappers, and Notes page workflows; broader integration and feature coverage remain future work.
+- Automated coverage includes SQLite persistence, note CRUD, frontend service wrappers/pages, and App-level preference/navigation and recovery flows. Visual/manual desktop smoke checks remain outstanding.
 - Rendered UI has not been visually verified.
 - Root `package.json` is a minimal stub with `wails` scripts only.
 - SQLite uses `modernc.org/sqlite`, a pure-Go driver (see [ADR 0002](decisions/0002-use-pure-go-sqlite-driver.md)).
@@ -239,11 +245,11 @@ Statuses: NOT_STARTED unless noted. P1-001 through P1-005, P2-001 through P2-003
 
 ## G. Next Recommended Task
 
-**P6-003: Integration and regression testing.**
+**P6-004: Windows production builds.**
 
-- **Why next:** Validate cross-feature workflows and protect the completed preferences, recovery, notes, timers, and study-tracking behavior with regression coverage.
-- **Prerequisites:** None.
-- **Acceptance:** Run the broad Go/frontend checks and add or repair integration/regression tests for key user workflows.
+- **Why next:** Verify the shipping desktop artifact after feature and regression-test work is complete.
+- **Prerequisites:** P1-005 is complete.
+- **Acceptance:** Run `wails build` on Windows, confirm the production executable is generated, and record build validation and any packaging limitations.
 
 ## H. Instructions for Future AI Sessions
 
