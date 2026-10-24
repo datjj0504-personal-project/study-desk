@@ -1,12 +1,15 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import {
   createNote,
   deleteNote,
+  getNote,
   listNotes,
   updateNote,
   type Note,
 } from "../services/notes";
 import { toErrorMessage } from "../utils/errors";
+
+const AUTOSAVE_DELAY_MS = 700;
 
 export function NotesPage() {
   const [notes, setNotes] = useState<Note[]>([]);
@@ -16,8 +19,10 @@ export function NotesPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [status, setStatus] = useState<string | null>(null);
+  const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const savingRef = useRef(false);
   const selectedNote = notes.find((note) => note.id === selectedId);
   const isDirty =
     selectedId === null
@@ -53,7 +58,8 @@ export function NotesPage() {
     setTitle(note.title);
     setBody(note.body);
     setError(null);
-    setStatus(null);
+    setSaveState("idle");
+    setStatusMessage(null);
     setConfirmDelete(false);
   }
 
@@ -62,7 +68,8 @@ export function NotesPage() {
     setTitle("");
     setBody("");
     setError(null);
-    setStatus(null);
+    setSaveState("idle");
+    setStatusMessage(null);
     setConfirmDelete(false);
   }
 
@@ -75,51 +82,76 @@ export function NotesPage() {
       setBody("");
     }
     setError(null);
-    setStatus(null);
+    setSaveState("idle");
+    setStatusMessage(null);
   }
 
-  async function handleSave(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  const saveDraft = useCallback(async () => {
+    if (savingRef.current || loading || !isDirty) return;
+    if (!title.trim()) {
+      setError("A title is required before this note can be saved.");
+      setSaveState("error");
+      return;
+    }
+
+    savingRef.current = true;
     setSaving(true);
+    setSaveState("saving");
     setError(null);
-    setStatus(null);
+    setStatusMessage(null);
     try {
-      if (!title.trim()) {
-        setError("A title is required.");
-        return;
-      }
       if (selectedId === null) {
         const created = await createNote({ title, body });
         setNotes((currentNotes) => [created, ...currentNotes]);
-        selectNote(created);
-        setStatus("Note created.");
+        setSelectedId(created.id);
+        setSaveState("saved");
+        setStatusMessage("Note created.");
       } else {
-        const current = notes.find((note) => note.id === selectedId);
+        const current = selectedNote;
         if (!current) {
           setError("The selected note is no longer available. Refresh the list and try again.");
+          setSaveState("error");
           return;
         }
         await updateNote({ ...current, title, body });
-        const updated = { ...current, title, body };
+        const updated = await getNote(selectedId);
         setNotes((currentNotes) => [
           updated,
           ...currentNotes.filter((note) => note.id !== selectedId),
         ]);
-        selectNote(updated);
-        setStatus("Note saved.");
+        setSaveState("saved");
+        setStatusMessage("Saved.");
       }
     } catch (saveError) {
       setError(toErrorMessage(saveError));
+      setSaveState("error");
     } finally {
+      savingRef.current = false;
       setSaving(false);
     }
+  }, [body, isDirty, loading, selectedId, selectedNote, title]);
+
+  useEffect(() => {
+    if (loading || !isDirty || !title.trim() || saving || saveState === "error") {
+      return;
+    }
+    const timeout = window.setTimeout(() => {
+      void saveDraft();
+    }, AUTOSAVE_DELAY_MS);
+    return () => window.clearTimeout(timeout);
+  }, [isDirty, loading, saveDraft, saveState, saving, title]);
+
+  function handleSave(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    void saveDraft();
   }
 
   async function handleDelete() {
-    if (selectedId === null) return;
+    if (selectedId === null || isDirty) return;
     setSaving(true);
     setError(null);
-    setStatus(null);
+    setStatusMessage(null);
+    setSaveState("idle");
     try {
       await deleteNote(selectedId);
       const remainingNotes = notes.filter((note) => note.id !== selectedId);
@@ -130,7 +162,7 @@ export function NotesPage() {
       } else {
         startNewNote();
       }
-      setStatus("Note deleted.");
+      setStatusMessage("Note deleted.");
     } catch (deleteError) {
       setError(toErrorMessage(deleteError));
     } finally {
@@ -160,11 +192,17 @@ export function NotesPage() {
           {error}
         </p>
       )}
-      {status && (
-        <p role="status" className="mb-4 text-sm text-emerald-300">
-          {status}
+      {saving ? (
+        <p role="status" className="mb-4 text-sm text-slate-300">Saving…</p>
+      ) : isDirty ? (
+        <p role="status" className="mb-4 text-sm text-amber-300">
+          {title.trim() ? "Unsaved changes" : "Add a title to save this note."}
         </p>
-      )}
+      ) : saveState === "saved" || statusMessage ? (
+        <p role="status" className="mb-4 text-sm text-emerald-300">
+          {statusMessage ?? "Saved."}
+        </p>
+      ) : null}
 
       <div className="grid min-h-0 flex-1 gap-5 lg:grid-cols-[16rem_minmax(0,1fr)]">
         <aside className="rounded-xl border border-edge bg-panel p-3">
@@ -213,9 +251,15 @@ export function NotesPage() {
           <input
             id="note-title"
             value={title}
-            onChange={(event) => setTitle(event.target.value)}
+            onChange={(event) => {
+              setTitle(event.target.value);
+              setSaveState("idle");
+              setError(null);
+              setStatusMessage(null);
+            }}
             required
             maxLength={200}
+            disabled={saving}
             placeholder="Note title"
             className="mb-4 rounded-md border border-edge bg-surface px-3 py-2 text-lg text-slate-100 outline-none focus:border-accent"
           />
@@ -225,8 +269,14 @@ export function NotesPage() {
           <textarea
             id="note-body"
             value={body}
-            onChange={(event) => setBody(event.target.value)}
+            onChange={(event) => {
+              setBody(event.target.value);
+              setSaveState("idle");
+              setError(null);
+              setStatusMessage(null);
+            }}
             placeholder="Write your note…"
+            disabled={saving}
             className="min-h-48 flex-1 resize-y rounded-md border border-edge bg-surface px-3 py-2 text-sm leading-6 text-slate-100 outline-none focus:border-accent"
           />
           <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
@@ -238,7 +288,7 @@ export function NotesPage() {
                     <button
                       type="button"
                       onClick={discardChanges}
-                      disabled={saving}
+                      disabled={saving || isDirty}
                       className="rounded-md px-3 py-2 text-sm text-slate-300 hover:bg-edge disabled:opacity-50"
                     >
                       Discard changes
@@ -252,7 +302,7 @@ export function NotesPage() {
                       <button
                         type="button"
                         onClick={handleDelete}
-                        disabled={saving}
+                        disabled={saving || isDirty}
                         className="rounded-md bg-red-600 px-3 py-2 text-white hover:bg-red-500 disabled:opacity-50"
                       >
                         Confirm
@@ -279,10 +329,10 @@ export function NotesPage() {
             </div>
             <button
               type="submit"
-              disabled={saving || loading}
+              disabled={saving || loading || !isDirty}
               className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              {saving ? "Saving…" : selectedId === null ? "Create note" : "Save changes"}
+              {saving ? "Saving…" : "Save now"}
             </button>
           </div>
         </form>
