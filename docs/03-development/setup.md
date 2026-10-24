@@ -32,4 +32,4 @@ If `wails dev` reports missing `build/` assets (icon, manifest), generate them w
 wails dev
 ```
 
-See [development workflow](development-workflow.md).
+See [development workflow](development-workflow.md). For end-user installation, backups, and release builds, see [installation, backup, and release](../05-release/install-backup.md).

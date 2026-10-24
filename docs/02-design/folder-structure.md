@@ -17,6 +17,7 @@
 | `frontend/wailsjs/` | Generated bindings (ignored; never edit). |
 | `tests/` | Cross-package integration tests. |
 | `docs/` | Project documentation, numbered by phase. |
+| `docs/05-release/` | Windows installation, local data backup/restore, and release-build instructions. |
 | `ai/` | Persistent context and prompts for AI coding agents; see [ai/README.md](../../ai/README.md). |
 
 Directories that contain only a README are reserved; Go packages are added when implemented. See [architecture](architecture.md).

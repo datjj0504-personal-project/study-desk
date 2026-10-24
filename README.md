@@ -2,16 +2,15 @@
 
 A local-first Windows desktop study companion built with Go, Wails, React, TypeScript, Tailwind CSS and SQLite.
 
-> Status: desktop shell only (sidebar and placeholder pages). No features are implemented yet. Progress: [ai/PROJECT_STATUS.md](ai/PROJECT_STATUS.md).
+> Status: functional Windows desktop build available. Current release limitations and project progress: [ai/PROJECT_STATUS.md](ai/PROJECT_STATUS.md).
 
-## Features (planned)
+## Features
 
-- Notes management
-- Focus timer (Pomodoro)
+- Notes with subjects, search, and automatic saving
+- Configurable Pomodoro focus and break timer with completion alerts
 - Stopwatch
-- Study session tracking
-- Basic study statistics
-- Local data persistence (no server, no Docker)
+- Study session history and statistics
+- Locally persisted notes, sessions, timer preferences, and appearance settings
 
 Details: [functional requirements](docs/01-requirements/functional-requirements.md).
 
@@ -25,27 +24,25 @@ Details: [functional requirements](docs/01-requirements/functional-requirements.
 | Styling | Tailwind CSS |
 | Database | SQLite (local file) |
 
-## Prerequisites
+## Running the Windows build
 
-- Windows 10/11 with WebView2 runtime
+The application requires Windows 10/11 and the Microsoft Edge WebView2 Runtime. No Go or Node.js installation is needed to run the prebuilt executable.
+
+Download or build `studydesk.exe`, copy it to a folder writable by your Windows user, and launch it. StudyDesk currently ships as an executable, not an installer; see [installation, backup, and release instructions](docs/05-release/install-backup.md).
+
+## Development prerequisites
+
+- Windows 10/11 with WebView2 Runtime
 - Go (1.21+)
 - Node.js (LTS) and npm
 - Wails CLI v2 (`go install github.com/wailsapp/wails/v2/cmd/wails@latest`)
 
-Verify with `wails doctor`. Full instructions: [setup](docs/03-development/setup.md).
-
-## Setup
-
-```powershell
-wails doctor
-cd frontend; npm install; cd ..
-```
-
-The `frontend/dist` folder must exist for a plain `go build`; `wails dev` and `wails build` create it automatically.
+Verify the toolchain with `wails doctor`. Full instructions: [development setup](docs/03-development/setup.md).
 
 ## Development
 
 ```powershell
+cd frontend; npm install; cd ..
 wails dev
 ```
 
@@ -68,7 +65,7 @@ Strategy: [testing strategy](docs/04-testing/testing-strategy.md).
 wails build
 ```
 
-Output goes to `build/bin/`.
+The Windows executable is written to `build/bin/studydesk.exe`. Build and release details: [installation, backup, and release instructions](docs/05-release/install-backup.md).
 
 ## Documentation
 

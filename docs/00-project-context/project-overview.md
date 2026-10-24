@@ -18,10 +18,6 @@ See [functional requirements](../01-requirements/functional-requirements.md) and
 
 ## Milestones
 
-1. **M0 Foundation**: repository structure, docs, Wails project generated (current).
-2. **M1 Storage**: SQLite setup and migrations, settings.
-3. **M2 Notes**: CRUD and search.
-4. **M3 Timer and stopwatch**: Pomodoro and stopwatch.
-5. **M4 Sessions**: record sessions from timers and manual entry.
-6. **M5 Statistics**: daily/weekly totals.
-7. **M6 Release**: Windows build and installer.
+The foundation, local storage, notes, timer/stopwatch, study tracking, preferences, and Windows executable milestones are implemented. See [project status](../../ai/PROJECT_STATUS.md) for task-level progress.
+
+The Windows executable and end-user backup/restore instructions are available; an installer, uninstaller, auto-updater, and code signing are not currently configured. See [Windows installation, backup, and release](../05-release/install-backup.md).

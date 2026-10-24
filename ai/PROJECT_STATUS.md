@@ -1,6 +1,6 @@
 # StudyDesk Project Status
 
-Single source of truth for progress. Last updated: 2026-10-24 (P6-004 marked done).
+Single source of truth for progress. Last updated: 2026-10-24 (P6-005 marked done).
 
 ## A. Project Overview
 
@@ -25,6 +25,7 @@ Single source of truth for progress. Last updated: 2026-10-24 (P6-004 marked don
 | Error recovery UX | DONE | Notes loading and preference initialization failures remain distinct from empty/success states and offer retry actions. |
 | Testing | DONE | Go unit/integration suites, race checks, vet/build, frontend suite, and production type/build checks pass; App preference/navigation regression coverage is included. |
 | Build and packaging | DONE | Windows/amd64 production build succeeds and creates `build/bin/studydesk.exe` (about 16.2 MB). No installer. |
+| Installation and data recovery | DONE | Portable executable install, `%APPDATA%` data location, and close-before-backup ZIP/restore instructions documented. |
 
 ## C. Completed Tasks
 
@@ -190,13 +191,19 @@ Single source of truth for progress. Last updated: 2026-10-24 (P6-004 marked don
 - **Validation:** `wails build` succeeded; verified the executable exists and is non-empty; `git diff --check` passed. The executable was not launched as part of this build check.
 - **Files:** `build/bin/studydesk.exe` (generated, git-ignored), `ai/PROJECT_STATUS.md`.
 
+### P6-005: Install, backup, and release documentation
+- **Completed:** 2026-10-24
+- **Summary:** Documented portable Windows installation and WebView2 prerequisite, build/release steps, SHA-256 checksum generation, local `%APPDATA%\StudyDesk\studydesk.db` contents, and PowerShell ZIP backup/restore procedures that require closing the app and preserve pre-restore data. Updated README and project overview to reflect implemented features and current installer/signing limitations.
+- **Validation:** Manually checked paths and commands against `OpenAppDatabase`, `wails.json`, and the successful Windows production build; `git diff --check` passed. Documentation examples were not executed on a separate end-user machine.
+- **Files:** `README.md`, `docs/05-release/install-backup.md`, `docs/03-development/setup.md`, `docs/00-project-context/project-overview.md`, `docs/02-design/folder-structure.md`, `ai/PROJECT_STATUS.md`.
+
 ## D. Current Task
 
 No task is currently in progress.
 
 ## E. Remaining Tasks and Roadmap
 
-Statuses: NOT_STARTED unless noted. P1-001 through P1-005, P2-001 through P2-003, P3-001 through P3-006, P4-001 through P4-007, P5-001 through P5-004, and P6-001 through P6-004 are complete.
+Statuses: NOT_STARTED unless noted. P1-001 through P1-005, P2-001 through P2-003, P3-001 through P3-006, P4-001 through P4-007, P5-001 through P5-004, and P6-001 through P6-005 are complete.
 
 **Phase 1 — Foundation**
 - P1-004: DONE (see C).
@@ -235,7 +242,7 @@ Statuses: NOT_STARTED unless noted. P1-001 through P1-005, P2-001 through P2-003
 - P6-002: DONE — Error handling and UX improvements (see C).
 - P6-003: DONE — Integration and regression testing (see C).
 - P6-004: DONE — Windows production builds (see C).
-- P6-005: Install, backup, and release documentation.
+- P6-005: DONE — Install, backup, and release documentation (see C).
 
 ## F. Known Issues and Technical Decisions
 
@@ -251,11 +258,7 @@ Statuses: NOT_STARTED unless noted. P1-001 through P1-005, P2-001 through P2-003
 
 ## G. Next Recommended Task
 
-**P6-005: Install, backup, and release documentation.**
-
-- **Why next:** Document how to install and operate the generated Windows build and how local user data can be backed up and restored.
-- **Prerequisites:** P6-004 is complete.
-- **Acceptance:** Provide accurate build/install instructions, identify the local data location, and document safe backup and restore steps and current installer limitations.
+**No roadmap tasks remain.** Review release documentation and the generated executable, then add any future features or distribution tasks after agreement on scope.
 
 ## H. Instructions for Future AI Sessions
 
