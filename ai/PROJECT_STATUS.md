@@ -1,6 +1,6 @@
 # StudyDesk Project Status
 
-Single source of truth for progress. Last updated: 2026-10-24 (P4-001 marked done).
+Single source of truth for progress. Last updated: 2026-10-24 (P4-002 marked done).
 
 ## A. Project Overview
 
@@ -19,7 +19,7 @@ Single source of truth for progress. Last updated: 2026-10-24 (P4-001 marked don
 | Wails integration | DONE | Wails CLI v2.17.0, `wails doctor` passes, `wails build` succeeds, bindings generated, `GetAppInfo` round trip accepted by the user. |
 | Database | DONE | Pure-Go SQLite driver, app-data initialization, and versioned schema migrations are implemented. |
 | Notes feature | DONE | Note CRUD, autosave, title/body search, subject organization, and feature tests are implemented. |
-| Timer and stopwatch | IN_PROGRESS | Testable timer state engine and timing rules are implemented; Wails controls and UI remain. |
+| Timer and stopwatch | IN_PROGRESS | Pomodoro state engine and Wails controls/state polling are implemented; frontend timer and stopwatch remain. |
 | Testing | IN_PROGRESS | Go storage/domain and frontend service/page tests are in place; expand coverage as features land. |
 | Build and packaging | IN_PROGRESS | `wails build` produced `build/bin/studydesk.exe`, which launches. No installer. |
 
@@ -115,13 +115,19 @@ Single source of truth for progress. Last updated: 2026-10-24 (P4-001 marked don
 - **Validation:** `go test ./... -count=1`, `go vet ./...`, `go build ./...`, and `git diff --check` passed.
 - **Files:** `internal/timer/{timer.go,timer_test.go,README.md}`.
 
+### P4-002: Pomodoro countdown, pause, resume, reset, completion
+- **Completed:** 2026-10-24
+- **Summary:** Initialized a default Pomodoro timer on app startup and exposed state snapshots plus start, pause, resume, reset, and phase-advance Wails methods. Snapshots provide phase/status and duration, elapsed, and remaining time in milliseconds; completion is reflected when state is polled.
+- **Validation:** `go test ./... -count=1`, `go vet ./...`, `go build ./...`, `wails build` (including generated Pomodoro bindings), and `git diff --check` passed.
+- **Files:** `app.go`, `app_test.go`, `frontend/wailsjs/go/main/App.d.ts` (generated/ignored), `ai/PROJECT_STATUS.md`.
+
 ## D. Current Task
 
 No task is currently in progress.
 
 ## E. Remaining Tasks and Roadmap
 
-Statuses: NOT_STARTED unless noted. P1-001 through P1-005, P2-001 through P2-003, P3-001 through P3-006, and P4-001 are complete.
+Statuses: NOT_STARTED unless noted. P1-001 through P1-005, P2-001 through P2-003, P3-001 through P3-006, and P4-001 through P4-002 are complete.
 
 **Phase 1 — Foundation**
 - P1-004: DONE (see C).
@@ -142,7 +148,7 @@ Statuses: NOT_STARTED unless noted. P1-001 through P1-005, P2-001 through P2-003
 
 **Phase 4 — Timer and Stopwatch**
 - P4-001: DONE (see C).
-- P4-002: Pomodoro countdown, pause, resume, reset, completion. Depends on: P4-001.
+- P4-002: DONE (see C).
 - P4-003: Stopwatch. Depends on: P4-001.
 - P4-004: Timer and stopwatch UI. Depends on: P4-002, P4-003, P1-004.
 - P4-005: Notifications and configurable durations. Depends on: P4-002.
@@ -176,11 +182,11 @@ Statuses: NOT_STARTED unless noted. P1-001 through P1-005, P2-001 through P2-003
 
 ## G. Next Recommended Task
 
-**P4-002: Pomodoro countdown, pause, resume, reset, completion.**
+**P4-003: Stopwatch.**
 
-- **Why next:** The timer domain now defines deterministic state transitions and timing; the next task can expose and drive the Pomodoro timer through the app.
+- **Why next:** The shared timing state engine and app integration are ready; implement stopwatch controls and state exposure before building the combined timer UI.
 - **Prerequisites:** P4-001 done.
-- **Acceptance:** Start, pause, resume and reset countdowns, expose completion to the UI, and validate timer durations.
+- **Acceptance:** Expose start, pause, resume, reset, and elapsed state for the stopwatch through the app.
 
 ## H. Instructions for Future AI Sessions
 
