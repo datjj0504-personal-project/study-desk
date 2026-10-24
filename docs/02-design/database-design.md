@@ -1,6 +1,8 @@
 # Database Design
 
-> **PROPOSAL ONLY.** This schema is not implemented. It will be finalized in the first storage task and delivered as a migration in [migrations/](../../migrations/README.md).
+The initial schema is implemented by the embedded `0001_init.sql` migration in
+[migrations/](../../migrations/README.md). Future schema changes must be added
+as new, versioned migrations rather than editing an applied migration.
 
 SQLite, one local file. Timestamps are stored as UTC ISO-8601 text; IDs are integer primary keys.
 

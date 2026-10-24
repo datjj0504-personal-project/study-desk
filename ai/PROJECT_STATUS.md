@@ -1,6 +1,6 @@
 # StudyDesk Project Status
 
-Single source of truth for progress. Last updated: 2026-10-19 (P1-005 marked done).
+Single source of truth for progress. Last updated: 2026-10-24 (P2-002 marked done).
 
 ## A. Project Overview
 
@@ -17,7 +17,7 @@ Single source of truth for progress. Last updated: 2026-10-19 (P1-005 marked don
 | Backend (Go) | IN_PROGRESS | `main.go`, `app.go` (`App` with `GetAppInfo`). No domain code. |
 | Frontend | IN_PROGRESS | UI shell with sidebar and placeholder pages; dashboard shows backend connection status. No feature logic. |
 | Wails integration | DONE | Wails CLI v2.17.0, `wails doctor` passes, `wails build` succeeds, bindings generated, `GetAppInfo` round trip accepted by the user. |
-| Database | IN_PROGRESS | Pure-Go SQLite driver selected and integrated; initialization and migrations remain. |
+| Database | DONE | Pure-Go SQLite driver, app-data initialization, and versioned schema migrations are implemented. |
 | Notes feature | NOT_STARTED | Placeholder UI only. |
 | Timer and stopwatch | NOT_STARTED | Placeholder UI only. |
 | Testing | IN_PROGRESS | Initial Go and frontend tests are in place; expand coverage as features land. |
@@ -61,13 +61,19 @@ Single source of truth for progress. Last updated: 2026-10-19 (P1-005 marked don
 - **Validation:** `go test ./...` and `go vet ./...` passed; a Windows/amd64 production-tag build succeeded with `CGO_ENABLED=0`.
 - **Files:** `go.mod`, `go.sum`, `internal/storage/{sqlite.go,sqlite_test.go}`, `ai/decisions/{0002-use-pure-go-sqlite-driver.md,README.md,0001-use-wails-go-react-sqlite.md}`, `docs/02-design/database-design.md`.
 
+### P2-002: Database initialization and schema migrations
+- **Completed:** 2026-10-24
+- **Summary:** Added app-data database initialization under the user's config directory, SQLite foreign-key/busy-timeout/WAL settings, embedded versioned migrations with transactional application and migration history, and the initial subjects/notes/study sessions/settings schema. Wails startup initializes the database, reports initialization failures through the backend status method, and closes the handle on shutdown.
+- **Validation:** `go test ./...`, `go vet ./...`, `go build ./...`, and `git diff --check` passed.
+- **Files:** `app.go`, `main.go`, `migrations/{embed.go,0001_init.sql,README.md}`, `internal/storage/{sqlite.go,sqlite_test.go,README.md}`, `docs/02-design/database-design.md`.
+
 ## D. Current Task
 
 No task is currently in progress.
 
 ## E. Remaining Tasks and Roadmap
 
-Statuses: NOT_STARTED unless noted. P1-001 through P1-005 and P2-001 are complete.
+Statuses: NOT_STARTED unless noted. P1-001 through P1-005 and P2-001 through P2-002 are complete.
 
 **Phase 1 — Foundation**
 - P1-004: DONE (see C).
@@ -75,7 +81,7 @@ Statuses: NOT_STARTED unless noted. P1-001 through P1-005 and P2-001 are complet
 
 **Phase 2 — Local Storage**
 - P2-001: DONE (see C).
-- P2-002: Database initialization and schema migrations. Depends on: P2-001.
+- P2-002: DONE (see C).
 - P2-003: Persistence and storage tests. Depends on: P2-002.
 
 **Phase 3 — Notes**
@@ -122,12 +128,11 @@ Statuses: NOT_STARTED unless noted. P1-001 through P1-005 and P2-001 are complet
 
 ## G. Next Recommended Task
 
-**P2-002: Database initialization and schema migrations.**
+**P2-003: Persistence and storage tests.**
 
-- **Why next:** The driver is selected and integrated; database initialization and versioned schema migrations are needed before persistence can be built.
-- **Prerequisites:** P2-001 done.
-- **Steps (P2-002):** Define the app-data database location, initialize SQLite with appropriate connection settings, and apply versioned migrations with explicit error handling.
-- **Acceptance:** The app can initialize its local database and apply the schema from `migrations/` reliably.
+- **Why next:** The database is initialized and versioned; storage behavior needs broader persistence-level coverage before domain repositories are added.
+- **Prerequisites:** P2-002 done.
+- **Acceptance:** Storage tests cover persistence and migration behavior needed by upcoming features.
 
 ## H. Instructions for Future AI Sessions
 
