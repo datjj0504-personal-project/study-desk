@@ -117,6 +117,51 @@ func (r *SessionRepository) ListSessions(ctx context.Context) ([]study.Session, 
 	return sessions, nil
 }
 
+func (r *SessionRepository) GetStatistics(ctx context.Context, window study.StatisticsWindow) (study.Statistics, error) {
+	var statistics study.Statistics
+	err := r.db.QueryRowContext(ctx, `
+		SELECT
+			COALESCE(SUM(CASE WHEN started_at >= ? AND started_at < ? THEN duration_seconds ELSE 0 END), 0),
+			COALESCE(SUM(CASE WHEN started_at >= ? AND started_at < ? THEN duration_seconds ELSE 0 END), 0),
+			COALESCE(SUM(duration_seconds), 0)
+		FROM study_sessions
+	`, window.TodayStart.UTC().Format(sqliteTimestampLayout), window.TodayEnd.UTC().Format(sqliteTimestampLayout),
+		window.WeekStart.UTC().Format(sqliteTimestampLayout), window.WeekEnd.UTC().Format(sqliteTimestampLayout)).
+		Scan(&statistics.TodaySeconds, &statistics.WeekSeconds, &statistics.AllTimeSeconds)
+	if err != nil {
+		return study.Statistics{}, fmt.Errorf("get study duration totals: %w", err)
+	}
+
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT ss.subject_id, COALESCE(s.name, 'Unassigned'), SUM(ss.duration_seconds)
+		FROM study_sessions ss
+		LEFT JOIN subjects s ON s.id = ss.subject_id
+		GROUP BY ss.subject_id, s.name
+		ORDER BY SUM(ss.duration_seconds) DESC, COALESCE(s.name, 'Unassigned') COLLATE NOCASE
+	`)
+	if err != nil {
+		return study.Statistics{}, fmt.Errorf("get study duration by subject: %w", err)
+	}
+	defer rows.Close()
+
+	statistics.BySubject = make([]study.SubjectStatistics, 0)
+	for rows.Next() {
+		var subject study.SubjectStatistics
+		var subjectID sql.NullInt64
+		if err := rows.Scan(&subjectID, &subject.SubjectName, &subject.DurationSeconds); err != nil {
+			return study.Statistics{}, fmt.Errorf("scan subject study duration: %w", err)
+		}
+		if subjectID.Valid {
+			subject.SubjectID = &subjectID.Int64
+		}
+		statistics.BySubject = append(statistics.BySubject, subject)
+	}
+	if err := rows.Err(); err != nil {
+		return study.Statistics{}, fmt.Errorf("iterate subject study durations: %w", err)
+	}
+	return statistics, nil
+}
+
 type sessionScanner interface {
 	Scan(...any) error
 }

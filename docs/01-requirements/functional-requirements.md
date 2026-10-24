@@ -29,8 +29,8 @@ Initial draft. IDs are stable references for tasks and tests.
 
 ## Statistics
 
-- FR-ST1: Show total study time for today, this week, and all time.
-- FR-ST2: Show time per subject.
+- FR-ST1: Show total study time for today, this week, and all time, grouped by session start time in the computer's local timezone; the week starts on Monday.
+- FR-ST2: Show all-time study duration per subject, including unassigned sessions.
 - FR-ST3: Show daily totals for the last 7 and 30 days.
 
 ## Settings

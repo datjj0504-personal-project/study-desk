@@ -209,6 +209,18 @@ func (a *App) ListSubjects() ([]notes.Subject, error) {
 	return result, nil
 }
 
+// GetStudyStatistics returns study durations for the local day, local week, all time, and each subject.
+func (a *App) GetStudyStatistics() (study.Statistics, error) {
+	if a.sessions == nil || a.ctx == nil {
+		return study.Statistics{}, errors.New("study session persistence is unavailable before application startup")
+	}
+	statistics, err := a.sessions.GetStatistics(a.ctx, study.NewStatisticsWindow(a.now()))
+	if err != nil {
+		return study.Statistics{}, fmt.Errorf("get study statistics: %w", err)
+	}
+	return statistics, nil
+}
+
 // GetPomodoroState returns the current countdown and phase state.
 func (a *App) GetPomodoroState() (PomodoroState, error) {
 	a.pomodoroMu.Lock()

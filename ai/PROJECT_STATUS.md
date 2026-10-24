@@ -1,6 +1,6 @@
 # StudyDesk Project Status
 
-Single source of truth for progress. Last updated: 2026-10-24 (P5-002 marked done).
+Single source of truth for progress. Last updated: 2026-10-24 (P5-003 marked done).
 
 ## A. Project Overview
 
@@ -15,11 +15,11 @@ Single source of truth for progress. Last updated: 2026-10-24 (P5-002 marked don
 | --- | --- | --- |
 | Project initialization | DONE | Structure, docs, and Wails app skeleton exist. |
 | Backend (Go) | IN_PROGRESS | `App` adapter, SQLite initialization, and notes persistence operations are implemented; other domains remain. |
-| Frontend | IN_PROGRESS | Dashboard, Notes, Timer, Stopwatch, and Settings pages are implemented; statistics remains a placeholder. |
+| Frontend | IN_PROGRESS | Dashboard, Notes, Timer, Stopwatch, Settings, and Statistics pages are implemented; session history remains. |
 | Wails integration | DONE | Wails CLI v2.17.0, `wails doctor` passes, `wails build` succeeds, bindings generated, `GetAppInfo` round trip accepted by the user. |
 | Database | DONE | Pure-Go SQLite driver, app-data initialization, and versioned schema migrations are implemented. |
 | Notes feature | DONE | Note CRUD, autosave, title/body search, subject organization, and feature tests are implemented. |
-| Study sessions | IN_PROGRESS | Session model, SQLite persistence, and automatic recording of completed focus and stopwatch sessions are implemented; session history UI remains. |
+| Study sessions | IN_PROGRESS | Session persistence, automatic completion recording, and daily/weekly/all-time/by-subject statistics are implemented; session history UI remains. |
 | Timer and stopwatch | IN_PROGRESS | Pomodoro and stopwatch controls, configurable persisted durations, completion notifications, restart recovery, and elapsed-time handling across sleep are implemented. |
 | Testing | IN_PROGRESS | Go storage/domain and frontend service/page tests are in place; expand coverage as features land. |
 | Build and packaging | IN_PROGRESS | `wails build` produced `build/bin/studydesk.exe`, which launches. No installer. |
@@ -152,13 +152,19 @@ Single source of truth for progress. Last updated: 2026-10-24 (P5-002 marked don
 - **Validation:** `go test ./... -count=1`, `go test -race ./internal/study ./internal/storage ./internal/timer`, `go vet ./...`, `go build ./...`, and `git diff --check` passed.
 - **Files:** `app.go`, `app_test.go`, `internal/{study,storage}`, `internal/timer/timer.go`, `migrations/0002_study_session_completion_key.sql`, `docs/02-design/database-design.md`, `ai/PROJECT_STATUS.md`.
 
+### P5-003: Basic statistics
+- **Completed:** 2026-10-24
+- **Summary:** Added persisted-session aggregates for today's and this week's active duration, all-time duration, and all-time duration by subject (including unassigned sessions). Day and week windows use the computer's local timezone, include sessions by start time through the current time, and use Monday as the first day of the week. Added a refreshable Statistics page with loading, empty, and error states.
+- **Validation:** `go test ./... -count=1`, `go test -race ./internal/study ./internal/storage`, `go vet ./...`, `go build ./...`, `frontend: npm run test`, `frontend: npm run build`, `wails build`, and `git diff --check` passed.
+- **Files:** `app.go`, `app_test.go`, `internal/{study,storage}`, `frontend/src/{App.tsx,pages/StatisticsPage.tsx,services/statistics.ts}`, `docs/01-requirements/functional-requirements.md`, `ai/PROJECT_STATUS.md`.
+
 ## D. Current Task
 
 No task is currently in progress.
 
 ## E. Remaining Tasks and Roadmap
 
-Statuses: NOT_STARTED unless noted. P1-001 through P1-005, P2-001 through P2-003, P3-001 through P3-006, P4-001 through P4-007, and P5-001 through P5-002 are complete.
+Statuses: NOT_STARTED unless noted. P1-001 through P1-005, P2-001 through P2-003, P3-001 through P3-006, P4-001 through P4-007, and P5-001 through P5-003 are complete.
 
 **Phase 1 — Foundation**
 - P1-004: DONE (see C).
@@ -189,7 +195,7 @@ Statuses: NOT_STARTED unless noted. P1-001 through P1-005, P2-001 through P2-003
 **Phase 5 — Study Tracking**
 - P5-001: DONE — Session model and persistence. (see C)
 - P5-002: DONE — Record completed sessions. (see C)
-- P5-003: Basic statistics. Depends on: P5-002.
+- P5-003: DONE — Basic statistics. (see C)
 - P5-004: Session history and tests. Depends on: P5-002.
 
 **Phase 6 — Polish and Release**
@@ -213,11 +219,11 @@ Statuses: NOT_STARTED unless noted. P1-001 through P1-005, P2-001 through P2-003
 
 ## G. Next Recommended Task
 
-**P5-003: Basic statistics.**
+**P5-004: Session history and tests.**
 
-- **Why next:** Completed study sessions are now recorded reliably, providing data for daily, weekly, all-time, and per-subject statistics.
+- **Why next:** Sessions can be recorded and summarized, but users cannot yet browse, filter, or verify individual records.
 - **Prerequisites:** P5-002 done.
-- **Acceptance:** Aggregate study duration for today, this week, all time, and by subject using persisted sessions.
+- **Acceptance:** List persisted sessions by date and add feature-level history coverage.
 
 ## H. Instructions for Future AI Sessions
 

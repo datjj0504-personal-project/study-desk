@@ -19,3 +19,8 @@ The app records a Pomodoro session when a focus phase completes. A stopwatch
 session is recorded when the user resets the stopwatch after it has run; paused
 intervals are reflected in the start/end timestamps but excluded from its
 active duration.
+
+Statistics aggregate active duration by session start time. Daily and weekly
+windows use the computer's local timezone and run through the current time;
+weeks begin on Monday. All-time and per-subject totals include every persisted
+session.

@@ -197,6 +197,81 @@ func TestSessionRepositoryDeduplicatesCompletedSessions(t *testing.T) {
 	}
 }
 
+func TestSessionRepositoryAggregatesStudyStatistics(t *testing.T) {
+	ctx := context.Background()
+	db, err := OpenDatabase(ctx, ":memory:")
+	if err != nil {
+		t.Fatalf("OpenDatabase() returned an error: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := db.Close(); err != nil {
+			t.Errorf("close SQLite database: %v", err)
+		}
+	})
+	repo := NewSessionRepository(db)
+	physicsResult, err := db.ExecContext(ctx, "INSERT INTO subjects (name, created_at) VALUES (?, ?)", "Physics", "2026-10-24T00:00:00Z")
+	if err != nil {
+		t.Fatalf("insert Physics subject: %v", err)
+	}
+	physicsID, err := physicsResult.LastInsertId()
+	if err != nil {
+		t.Fatalf("get Physics subject ID: %v", err)
+	}
+	biologyResult, err := db.ExecContext(ctx, "INSERT INTO subjects (name, created_at) VALUES (?, ?)", "Biology", "2026-10-24T00:00:00Z")
+	if err != nil {
+		t.Fatalf("insert Biology subject: %v", err)
+	}
+	biologyID, err := biologyResult.LastInsertId()
+	if err != nil {
+		t.Fatalf("get Biology subject ID: %v", err)
+	}
+
+	window := study.StatisticsWindow{
+		TodayStart: time.Date(2026, time.October, 21, 0, 0, 0, 0, time.UTC),
+		TodayEnd:   time.Date(2026, time.October, 21, 12, 0, 0, 0, time.UTC),
+		WeekStart:  time.Date(2026, time.October, 19, 0, 0, 0, 0, time.UTC),
+		WeekEnd:    time.Date(2026, time.October, 21, 12, 0, 0, 0, time.UTC),
+	}
+	empty, err := repo.GetStatistics(ctx, window)
+	if err != nil {
+		t.Fatalf("GetStatistics() on an empty repository returned an error: %v", err)
+	}
+	if empty.TodaySeconds != 0 || empty.WeekSeconds != 0 || empty.AllTimeSeconds != 0 || empty.BySubject == nil || len(empty.BySubject) != 0 {
+		t.Errorf("empty statistics = %+v, want zero totals and an empty subject list", empty)
+	}
+
+	sessions := []study.Session{
+		{SubjectID: &physicsID, Kind: study.SessionKindPomodoro, StartedAt: window.TodayStart.Add(time.Hour), EndedAt: window.TodayStart.Add(2 * time.Hour), DurationSeconds: 100},
+		{Kind: study.SessionKindStopwatch, StartedAt: window.WeekStart.Add(time.Hour), EndedAt: window.WeekStart.Add(2 * time.Hour), DurationSeconds: 200},
+		{SubjectID: &physicsID, Kind: study.SessionKindManual, StartedAt: window.WeekStart.Add(-time.Hour), EndedAt: window.WeekStart, DurationSeconds: 300},
+		{SubjectID: &biologyID, Kind: study.SessionKindManual, StartedAt: window.TodayEnd, EndedAt: window.TodayEnd.Add(time.Hour), DurationSeconds: 400},
+	}
+	for _, session := range sessions {
+		if _, err := repo.CreateSession(ctx, session); err != nil {
+			t.Fatalf("CreateSession() returned an error: %v", err)
+		}
+	}
+
+	got, err := repo.GetStatistics(ctx, window)
+	if err != nil {
+		t.Fatalf("GetStatistics() returned an error: %v", err)
+	}
+	if got.TodaySeconds != 100 || got.WeekSeconds != 300 || got.AllTimeSeconds != 1000 {
+		t.Errorf("statistics totals = today %d, week %d, all-time %d; want 100, 300, 1000",
+			got.TodaySeconds, got.WeekSeconds, got.AllTimeSeconds)
+	}
+	if len(got.BySubject) != 3 {
+		t.Fatalf("GetStatistics() returned %d subject rows, want 3: %+v", len(got.BySubject), got.BySubject)
+	}
+	durations := make(map[string]int64, len(got.BySubject))
+	for _, subject := range got.BySubject {
+		durations[subject.SubjectName] = subject.DurationSeconds
+	}
+	if durations["Physics"] != 400 || durations["Biology"] != 400 || durations["Unassigned"] != 200 {
+		t.Errorf("subject durations = %v, want Physics 400, Biology 400, Unassigned 200", durations)
+	}
+}
+
 func TestSessionRepositorySubjectDeletionSetsNull(t *testing.T) {
 	ctx := context.Background()
 	db, err := OpenDatabase(ctx, ":memory:")

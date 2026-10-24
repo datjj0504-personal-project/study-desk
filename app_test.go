@@ -546,3 +546,40 @@ func TestAppStopwatchRejectsInvalidTransitions(t *testing.T) {
 		t.Errorf("ResumeStopwatch() while idle error = %v, want %v", err, timer.ErrInvalidTransition)
 	}
 }
+
+func TestAppGetStudyStatisticsUsesLocalDateWindow(t *testing.T) {
+	ctx := context.Background()
+	db, err := storage.OpenDatabase(ctx, ":memory:")
+	if err != nil {
+		t.Fatalf("OpenDatabase() returned an error: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := db.Close(); err != nil {
+			t.Errorf("close SQLite database: %v", err)
+		}
+	})
+	location := time.FixedZone("UTC-7", -7*60*60)
+	now := time.Date(2026, time.October, 21, 12, 0, 0, 0, location)
+	repo := storage.NewSessionRepository(db)
+	for _, startedAt := range []time.Time{
+		time.Date(2026, time.October, 21, 6, 0, 0, 0, location),
+		time.Date(2026, time.October, 20, 6, 0, 0, 0, location),
+	} {
+		if _, err := repo.CreateSession(ctx, study.Session{
+			Kind: study.SessionKindPomodoro, StartedAt: startedAt,
+			EndedAt: startedAt.Add(time.Minute), DurationSeconds: 60,
+		}); err != nil {
+			t.Fatalf("CreateSession() returned an error: %v", err)
+		}
+	}
+	app := &App{ctx: ctx, sessions: repo, clock: &appTestClock{now: now}}
+
+	got, err := app.GetStudyStatistics()
+	if err != nil {
+		t.Fatalf("GetStudyStatistics() returned an error: %v", err)
+	}
+	if got.TodaySeconds != 60 || got.WeekSeconds != 120 || got.AllTimeSeconds != 120 {
+		t.Errorf("GetStudyStatistics() = today %d, week %d, all-time %d; want 60, 120, 120",
+			got.TodaySeconds, got.WeekSeconds, got.AllTimeSeconds)
+	}
+}
