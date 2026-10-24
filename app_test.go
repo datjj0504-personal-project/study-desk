@@ -9,6 +9,7 @@ import (
 	"studydesk/internal/notes"
 	"studydesk/internal/settings"
 	"studydesk/internal/storage"
+	"studydesk/internal/study"
 	"studydesk/internal/timer"
 )
 
@@ -44,6 +45,20 @@ func newAppTimerStateRepository(t *testing.T) timer.StateRepository {
 		}
 	})
 	return storage.NewTimerStateRepository(db)
+}
+
+func newAppSessionRepository(t *testing.T) study.SessionRepository {
+	t.Helper()
+	db, err := storage.OpenDatabase(context.Background(), ":memory:")
+	if err != nil {
+		t.Fatalf("OpenDatabase() returned an error: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := db.Close(); err != nil {
+			t.Errorf("close SQLite database: %v", err)
+		}
+	})
+	return storage.NewSessionRepository(db)
 }
 
 func TestGetAppInfo(t *testing.T) {
@@ -144,7 +159,12 @@ func TestAppPomodoroControls(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewPomodoro() returned an error: %v", err)
 	}
-	app := &App{ctx: ctx, pomodoro: pomodoro, timerStates: newAppTimerStateRepository(t)}
+	app := &App{
+		ctx: ctx, pomodoro: pomodoro,
+		timerStates: newAppTimerStateRepository(t),
+		sessions:    newAppSessionRepository(t),
+		clock:       clock,
+	}
 
 	state, err := app.GetPomodoroState()
 	if err != nil {
@@ -177,6 +197,17 @@ func TestAppPomodoroControls(t *testing.T) {
 	}
 	if state.Status != timer.StatusCompleted || state.RemainingMillis != 0 {
 		t.Errorf("completed state = %+v", state)
+	}
+	if _, err := app.GetPomodoroState(); err != nil {
+		t.Fatalf("GetPomodoroState() repeated after completion returned an error: %v", err)
+	}
+	sessions, err := app.sessions.ListSessions(ctx)
+	if err != nil {
+		t.Fatalf("ListSessions() after focus completion returned an error: %v", err)
+	}
+	if len(sessions) != 1 || sessions[0].Kind != study.SessionKindPomodoro ||
+		sessions[0].DurationSeconds != 10 || !sessions[0].StartedAt.Equal(time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)) {
+		t.Errorf("recorded focus sessions = %+v, want one completed 10-second focus session", sessions)
 	}
 	if err := app.AdvancePomodoro(); err != nil {
 		t.Fatalf("AdvancePomodoro() returned an error: %v", err)
@@ -219,6 +250,36 @@ func TestAppPomodoroRejectsInvalidTransitions(t *testing.T) {
 	}
 	if err := app.AdvancePomodoro(); !errors.Is(err, timer.ErrInvalidTransition) {
 		t.Errorf("AdvancePomodoro() while idle error = %v, want %v", err, timer.ErrInvalidTransition)
+	}
+}
+
+func TestAppResetRecordsFocusThatCompletedBeforePolling(t *testing.T) {
+	ctx := context.Background()
+	clock := &appTestClock{now: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)}
+	pomodoro, err := timer.NewPomodoro(clock, timer.Durations{
+		Focus: 10 * time.Second, ShortBreak: time.Second, LongBreak: time.Second, LongBreakEvery: 4,
+	})
+	if err != nil {
+		t.Fatalf("NewPomodoro() returned an error: %v", err)
+	}
+	app := &App{
+		ctx: ctx, pomodoro: pomodoro, clock: clock,
+		timerStates: newAppTimerStateRepository(t),
+		sessions:    newAppSessionRepository(t),
+	}
+	if err := app.StartPomodoro(); err != nil {
+		t.Fatalf("StartPomodoro() returned an error: %v", err)
+	}
+	clock.now = clock.now.Add(10 * time.Second)
+	if err := app.ResetPomodoro(); err != nil {
+		t.Fatalf("ResetPomodoro() returned an error: %v", err)
+	}
+	sessions, err := app.sessions.ListSessions(ctx)
+	if err != nil {
+		t.Fatalf("ListSessions() returned an error: %v", err)
+	}
+	if len(sessions) != 1 || sessions[0].DurationSeconds != 10 {
+		t.Errorf("recorded sessions after reset = %+v, want completed focus saved once", sessions)
 	}
 }
 
@@ -312,7 +373,8 @@ func TestAppRestoresTimersAfterRestartAndSleep(t *testing.T) {
 	}
 	firstRun := &App{
 		ctx: ctx, settingsRepo: settingsRepo, timerStates: stateRepo,
-		pomodoro: pomodoro, stopwatch: stopwatch,
+		sessions: storage.NewSessionRepository(db),
+		pomodoro: pomodoro, stopwatch: stopwatch, clock: clock,
 	}
 	if err := firstRun.StartPomodoro(); err != nil {
 		t.Fatalf("StartPomodoro() returned an error: %v", err)
@@ -332,7 +394,8 @@ func TestAppRestoresTimersAfterRestartAndSleep(t *testing.T) {
 	}
 	restored := &App{
 		ctx: ctx, settingsRepo: settingsRepo, timerStates: stateRepo,
-		pomodoro: restartedPomodoro, stopwatch: restartedStopwatch,
+		sessions: storage.NewSessionRepository(db),
+		pomodoro: restartedPomodoro, stopwatch: restartedStopwatch, clock: clock,
 	}
 	loadedSettings, err := settingsRepo.LoadTimerSettings(ctx)
 	if err != nil {
@@ -397,6 +460,8 @@ func TestAppStopwatchControls(t *testing.T) {
 		t.Fatalf("NewStopwatch() returned an error: %v", err)
 	}
 	app := &App{ctx: ctx, stopwatch: stopwatch, timerStates: newAppTimerStateRepository(t)}
+	app.sessions = newAppSessionRepository(t)
+	app.clock = clock
 
 	state, err := app.GetStopwatchState()
 	if err != nil {
@@ -450,6 +515,14 @@ func TestAppStopwatchControls(t *testing.T) {
 	}
 	if state.Status != timer.StatusIdle || state.ElapsedMillis != 0 {
 		t.Errorf("reset state = %+v, want idle with no elapsed time", state)
+	}
+	sessions, err := app.sessions.ListSessions(ctx)
+	if err != nil {
+		t.Fatalf("ListSessions() after stopwatch reset returned an error: %v", err)
+	}
+	if len(sessions) != 1 || sessions[0].Kind != study.SessionKindStopwatch ||
+		sessions[0].DurationSeconds != 6 || !sessions[0].StartedAt.Equal(time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)) {
+		t.Errorf("recorded stopwatch sessions = %+v, want one 6-second session", sessions)
 	}
 }
 

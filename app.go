@@ -12,6 +12,7 @@ import (
 	"studydesk/internal/notes"
 	"studydesk/internal/settings"
 	"studydesk/internal/storage"
+	"studydesk/internal/study"
 	"studydesk/internal/timer"
 )
 
@@ -44,6 +45,7 @@ type App struct {
 	ctx          context.Context
 	db           *sql.DB
 	noteRepo     notes.Repository
+	sessions     study.SessionRepository
 	settingsRepo settings.Repository
 	settingsErr  error
 	timerStates  timer.StateRepository
@@ -54,6 +56,7 @@ type App struct {
 	stopwatchErr error
 	stopwatchMu  sync.Mutex
 	startupErr   error
+	clock        timer.Clock
 }
 
 func NewApp() *App {
@@ -62,11 +65,12 @@ func NewApp() *App {
 
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
-	a.pomodoro, a.timerErr = timer.NewPomodoro(wallClock{}, timer.DefaultDurations())
+	a.clock = wallClock{}
+	a.pomodoro, a.timerErr = timer.NewPomodoro(a.clock, timer.DefaultDurations())
 	if a.timerErr != nil {
 		log.Printf("initialize Pomodoro timer: %v", a.timerErr)
 	}
-	a.stopwatch, a.stopwatchErr = timer.NewStopwatch(wallClock{})
+	a.stopwatch, a.stopwatchErr = timer.NewStopwatch(a.clock)
 	if a.stopwatchErr != nil {
 		log.Printf("initialize stopwatch: %v", a.stopwatchErr)
 	}
@@ -76,6 +80,7 @@ func (a *App) startup(ctx context.Context) {
 		return
 	}
 	a.noteRepo = storage.NewNoteRepository(a.db)
+	a.sessions = storage.NewSessionRepository(a.db)
 	a.settingsRepo = storage.NewSettingsRepository(a.db)
 	a.timerStates = storage.NewTimerStateRepository(a.db)
 	timerSettings, err := a.settingsRepo.LoadTimerSettings(ctx)
@@ -213,6 +218,11 @@ func (a *App) GetPomodoroState() (PomodoroState, error) {
 		return PomodoroState{}, err
 	}
 	state := pomodoro.State()
+	if state.Status == timer.StatusCompleted && state.Phase == timer.PhaseFocus {
+		if err := a.recordCompletedPomodoro(pomodoro.Snapshot()); err != nil {
+			return PomodoroState{}, err
+		}
+	}
 	return PomodoroState{
 		Phase:            state.Phase,
 		Status:           state.Status,
@@ -232,6 +242,9 @@ func (a *App) StartPomodoro() error {
 		return err
 	}
 	previous := pomodoro.Snapshot()
+	if err := a.recordPomodoroIfCompleted(previous); err != nil {
+		return err
+	}
 	if err := pomodoro.Start(); err != nil {
 		return fmt.Errorf("start Pomodoro: %w", err)
 	}
@@ -247,6 +260,9 @@ func (a *App) PausePomodoro() error {
 		return err
 	}
 	previous := pomodoro.Snapshot()
+	if err := a.recordPomodoroIfCompleted(previous); err != nil {
+		return err
+	}
 	if err := pomodoro.Pause(); err != nil {
 		return fmt.Errorf("pause Pomodoro: %w", err)
 	}
@@ -262,6 +278,9 @@ func (a *App) ResumePomodoro() error {
 		return err
 	}
 	previous := pomodoro.Snapshot()
+	if err := a.recordPomodoroIfCompleted(previous); err != nil {
+		return err
+	}
 	if err := pomodoro.Resume(); err != nil {
 		return fmt.Errorf("resume Pomodoro: %w", err)
 	}
@@ -277,6 +296,9 @@ func (a *App) ResetPomodoro() error {
 		return err
 	}
 	previous := pomodoro.Snapshot()
+	if err := a.recordPomodoroIfCompleted(previous); err != nil {
+		return err
+	}
 	pomodoro.Reset()
 	return a.persistTimerChange(pomodoro, previous)
 }
@@ -290,6 +312,9 @@ func (a *App) AdvancePomodoro() error {
 		return err
 	}
 	previous := pomodoro.Snapshot()
+	if err := a.recordPomodoroIfCompleted(previous); err != nil {
+		return err
+	}
 	if err := pomodoro.Advance(); err != nil {
 		return fmt.Errorf("advance Pomodoro: %w", err)
 	}
@@ -436,8 +461,86 @@ func (a *App) ResetStopwatch() error {
 		return err
 	}
 	previous := stopwatch.Snapshot()
+	if previous.SessionStartedAtUnixNano != 0 && previous.Elapsed > 0 {
+		if err := a.recordCompletedStopwatch(previous); err != nil {
+			return err
+		}
+	}
 	stopwatch.Reset()
 	return a.persistTimerChange(stopwatch, previous)
+}
+
+func (a *App) recordCompletedPomodoro(snapshot timer.Snapshot) error {
+	if a.sessions == nil || a.timerStates == nil || a.ctx == nil {
+		return errors.New("study session persistence is unavailable before application startup")
+	}
+	if snapshot.SessionStartedAtUnixNano == 0 {
+		return errors.New("completed Pomodoro phase has no start time")
+	}
+	persisted, found, err := a.timerStates.LoadTimerState(a.ctx, timer.ModePomodoro)
+	if err != nil {
+		return fmt.Errorf("check completed Pomodoro persistence: %w", err)
+	}
+	if found && persisted.Status == timer.StatusCompleted &&
+		persisted.Phase == timer.PhaseFocus &&
+		persisted.SessionStartedAtUnixNano == snapshot.SessionStartedAtUnixNano {
+		return nil
+	}
+	startedAt := time.Unix(0, snapshot.SessionStartedAtUnixNano).UTC()
+	endedAt := a.now().UTC()
+	if endedAt.Before(startedAt) {
+		endedAt = startedAt
+	}
+	session := study.Session{
+		Kind:            study.SessionKindPomodoro,
+		StartedAt:       startedAt,
+		EndedAt:         endedAt,
+		DurationSeconds: int64(snapshot.Elapsed / time.Second),
+	}
+	completionKey := fmt.Sprintf("pomodoro:%d", snapshot.SessionStartedAtUnixNano)
+	if _, err := a.sessions.CreateCompletedSession(a.ctx, session, completionKey); err != nil {
+		return fmt.Errorf("record completed Pomodoro session: %w", err)
+	}
+	if err := a.timerStates.SaveTimerState(a.ctx, snapshot); err != nil {
+		return fmt.Errorf("save completed Pomodoro state: %w", err)
+	}
+	return nil
+}
+
+func (a *App) recordPomodoroIfCompleted(snapshot timer.Snapshot) error {
+	if snapshot.Status == timer.StatusCompleted && snapshot.Phase == timer.PhaseFocus {
+		return a.recordCompletedPomodoro(snapshot)
+	}
+	return nil
+}
+
+func (a *App) recordCompletedStopwatch(snapshot timer.Snapshot) error {
+	if a.sessions == nil || a.ctx == nil {
+		return errors.New("study session persistence is unavailable before application startup")
+	}
+	startedAt := time.Unix(0, snapshot.SessionStartedAtUnixNano).UTC()
+	endedAt := a.now().UTC()
+	if endedAt.Before(startedAt) {
+		endedAt = startedAt
+	}
+	session := study.Session{
+		Kind:            study.SessionKindStopwatch,
+		StartedAt:       startedAt,
+		EndedAt:         endedAt,
+		DurationSeconds: int64(snapshot.Elapsed / time.Second),
+	}
+	completionKey := fmt.Sprintf("stopwatch:%d", snapshot.SessionStartedAtUnixNano)
+	if _, err := a.sessions.CreateCompletedSession(a.ctx, session, completionKey); err != nil {
+		return fmt.Errorf("record completed stopwatch session: %w", err)
+	}
+	return nil
+}
+
+func (a *App) now() time.Time {
+	if a.clock == nil {
+		return time.Now()
+	}
+	return a.clock.Now()
 }
 
 func (a *App) restoreTimerState(value *timer.Timer) error {

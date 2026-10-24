@@ -11,4 +11,11 @@ the end at or after the start, a non-negative duration, and a positive subject
 ID when one is provided.
 
 `SessionRepository` creates sessions, retrieves them by ID, and lists them
-newest-started first. SQLite implementations belong in `internal/storage`.
+newest-started first. Automatically completed sessions use a stable completion
+key so retries do not create duplicates. SQLite implementations belong in
+`internal/storage`.
+
+The app records a Pomodoro session when a focus phase completes. A stopwatch
+session is recorded when the user resets the stopwatch after it has run; paused
+intervals are reflected in the start/end timestamps but excluded from its
+active duration.

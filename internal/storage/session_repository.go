@@ -22,6 +22,17 @@ func NewSessionRepository(db *sql.DB) *SessionRepository {
 }
 
 func (r *SessionRepository) CreateSession(ctx context.Context, session study.Session) (study.Session, error) {
+	return r.createSession(ctx, session, "")
+}
+
+func (r *SessionRepository) CreateCompletedSession(ctx context.Context, session study.Session, completionKey string) (study.Session, error) {
+	if completionKey == "" {
+		return study.Session{}, fmt.Errorf("%w: completion key is required", study.ErrInvalidSession)
+	}
+	return r.createSession(ctx, session, completionKey)
+}
+
+func (r *SessionRepository) createSession(ctx context.Context, session study.Session, completionKey string) (study.Session, error) {
 	if session.ID != 0 {
 		return study.Session{}, fmt.Errorf("%w: new sessions cannot specify an ID", study.ErrInvalidSession)
 	}
@@ -32,12 +43,27 @@ func (r *SessionRepository) CreateSession(ctx context.Context, session study.Ses
 	endedAt := session.EndedAt.UTC()
 	result, err := r.db.ExecContext(ctx, `
 		INSERT INTO study_sessions
-			(subject_id, kind, started_at, ended_at, duration_seconds, note)
-		VALUES (?, ?, ?, ?, ?, ?)
+			(subject_id, kind, started_at, ended_at, duration_seconds, note, completion_key)
+		VALUES (?, ?, ?, ?, ?, ?, NULLIF(?, ''))
+		ON CONFLICT(completion_key) DO NOTHING
 	`, session.SubjectID, session.Kind, startedAt.Format(sqliteTimestampLayout),
-		endedAt.Format(sqliteTimestampLayout), session.DurationSeconds, session.Note)
+		endedAt.Format(sqliteTimestampLayout), session.DurationSeconds, session.Note, completionKey)
 	if err != nil {
 		return study.Session{}, fmt.Errorf("create study session: %w", err)
+	}
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return study.Session{}, fmt.Errorf("check created study session: %w", err)
+	}
+	if rowsAffected == 0 {
+		persisted, err := scanSession(r.db.QueryRowContext(ctx, `
+			SELECT id, subject_id, kind, started_at, ended_at, duration_seconds, note
+			FROM study_sessions WHERE completion_key = ?
+		`, completionKey))
+		if err != nil {
+			return study.Session{}, fmt.Errorf("load existing completed study session: %w", err)
+		}
+		return persisted, nil
 	}
 	session.ID, err = result.LastInsertId()
 	if err != nil {

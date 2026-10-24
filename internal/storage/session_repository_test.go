@@ -154,6 +154,49 @@ func TestSessionRepositoryRejectsInvalidAndMissingSessions(t *testing.T) {
 	}
 }
 
+func TestSessionRepositoryDeduplicatesCompletedSessions(t *testing.T) {
+	ctx := context.Background()
+	db, err := OpenDatabase(ctx, ":memory:")
+	if err != nil {
+		t.Fatalf("OpenDatabase() returned an error: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := db.Close(); err != nil {
+			t.Errorf("close SQLite database: %v", err)
+		}
+	})
+	repo := NewSessionRepository(db)
+	start := time.Date(2026, 10, 24, 10, 0, 0, 0, time.UTC)
+	session := study.Session{
+		Kind:      study.SessionKindPomodoro,
+		StartedAt: start, EndedAt: start.Add(25 * time.Minute),
+		DurationSeconds: 1500,
+	}
+	first, err := repo.CreateCompletedSession(ctx, session, "pomodoro:unique-session")
+	if err != nil {
+		t.Fatalf("CreateCompletedSession() returned an error: %v", err)
+	}
+	if _, err := repo.CreateCompletedSession(ctx, session, ""); !errors.Is(err, study.ErrInvalidSession) {
+		t.Errorf("CreateCompletedSession() without key error = %v, want %v", err, study.ErrInvalidSession)
+	}
+	duplicate := session
+	duplicate.Note = "retry"
+	got, err := repo.CreateCompletedSession(ctx, duplicate, "pomodoro:unique-session")
+	if err != nil {
+		t.Fatalf("CreateCompletedSession() retry returned an error: %v", err)
+	}
+	if got.ID != first.ID || got.Note != first.Note {
+		t.Errorf("duplicate completion = %+v, want original session %+v", got, first)
+	}
+	listed, err := repo.ListSessions(ctx)
+	if err != nil {
+		t.Fatalf("ListSessions() returned an error: %v", err)
+	}
+	if len(listed) != 1 {
+		t.Errorf("ListSessions() returned %d sessions, want one idempotent completion", len(listed))
+	}
+}
+
 func TestSessionRepositorySubjectDeletionSetsNull(t *testing.T) {
 	ctx := context.Background()
 	db, err := OpenDatabase(ctx, ":memory:")

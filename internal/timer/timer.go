@@ -69,27 +69,29 @@ type State struct {
 }
 
 type Snapshot struct {
-	Mode              Mode          `json:"mode"`
-	Phase             Phase         `json:"phase"`
-	Status            Status        `json:"status"`
-	Duration          time.Duration `json:"duration"`
-	Elapsed           time.Duration `json:"elapsed"`
-	StartedAtUnixNano int64         `json:"startedAtUnixNano"`
-	CompletedFocuses  int           `json:"completedFocuses"`
+	Mode                     Mode          `json:"mode"`
+	Phase                    Phase         `json:"phase"`
+	Status                   Status        `json:"status"`
+	Duration                 time.Duration `json:"duration"`
+	Elapsed                  time.Duration `json:"elapsed"`
+	StartedAtUnixNano        int64         `json:"startedAtUnixNano"`
+	SessionStartedAtUnixNano int64         `json:"sessionStartedAtUnixNano"`
+	CompletedFocuses         int           `json:"completedFocuses"`
 }
 
 // Timer owns one Pomodoro or stopwatch timeline.
 type Timer struct {
-	mu        sync.Mutex
-	clock     Clock
-	mode      Mode
-	durations Durations
-	phase     Phase
-	status    Status
-	duration  time.Duration
-	elapsed   time.Duration
-	startedAt time.Time
-	completed int
+	mu               sync.Mutex
+	clock            Clock
+	mode             Mode
+	durations        Durations
+	phase            Phase
+	status           Status
+	duration         time.Duration
+	elapsed          time.Duration
+	startedAt        time.Time
+	sessionStartedAt time.Time
+	completed        int
 }
 
 func NewPomodoro(clock Clock, durations Durations) (*Timer, error) {
@@ -129,6 +131,7 @@ func (t *Timer) Start() error {
 		return fmt.Errorf("start timer: %w: current status is %s", ErrInvalidTransition, t.status)
 	}
 	t.startedAt = t.clock.Now()
+	t.sessionStartedAt = t.startedAt
 	t.status = StatusRunning
 	return nil
 }
@@ -166,6 +169,7 @@ func (t *Timer) Reset() {
 	t.duration = 0
 	t.elapsed = 0
 	t.startedAt = time.Time{}
+	t.sessionStartedAt = time.Time{}
 	t.completed = 0
 	if t.mode == ModePomodoro {
 		t.phase = PhaseFocus
@@ -201,6 +205,7 @@ func (t *Timer) Advance() error {
 
 	t.elapsed = 0
 	t.startedAt = time.Time{}
+	t.sessionStartedAt = time.Time{}
 	t.status = StatusIdle
 	return nil
 }
@@ -223,6 +228,7 @@ func (t *Timer) Configure(durations Durations) error {
 	t.duration = durations.Focus
 	t.elapsed = 0
 	t.startedAt = time.Time{}
+	t.sessionStartedAt = time.Time{}
 	t.completed = 0
 	return nil
 }
@@ -269,13 +275,14 @@ func (t *Timer) Snapshot() Snapshot {
 		elapsed = t.duration
 	}
 	return Snapshot{
-		Mode:              t.mode,
-		Phase:             t.phase,
-		Status:            t.status,
-		Duration:          t.duration,
-		Elapsed:           elapsed,
-		StartedAtUnixNano: startedAt,
-		CompletedFocuses:  t.completed,
+		Mode:                     t.mode,
+		Phase:                    t.phase,
+		Status:                   t.status,
+		Duration:                 t.duration,
+		Elapsed:                  elapsed,
+		StartedAtUnixNano:        startedAt,
+		SessionStartedAtUnixNano: timestampOrZero(t.sessionStartedAt),
+		CompletedFocuses:         t.completed,
 	}
 }
 
@@ -332,17 +339,40 @@ func (t *Timer) Restore(snapshot Snapshot) error {
 	if snapshot.Status == StatusIdle && snapshot.Elapsed != 0 {
 		return fmt.Errorf("restore timer: %w: idle snapshot has elapsed time", ErrInvalidConfiguration)
 	}
+	if snapshot.Status == StatusIdle && snapshot.SessionStartedAtUnixNano != 0 {
+		return fmt.Errorf("restore timer: %w: idle snapshot has a session start time", ErrInvalidConfiguration)
+	}
+	if snapshot.Status != StatusIdle && snapshot.SessionStartedAtUnixNano < 0 {
+		return fmt.Errorf("restore timer: %w: session start time is invalid", ErrInvalidConfiguration)
+	}
 	t.phase = snapshot.Phase
 	t.status = snapshot.Status
 	t.duration = snapshot.Duration
 	t.elapsed = snapshot.Elapsed
 	t.completed = snapshot.CompletedFocuses
 	t.startedAt = time.Time{}
+	t.sessionStartedAt = time.Time{}
+	if snapshot.SessionStartedAtUnixNano != 0 {
+		t.sessionStartedAt = time.Unix(0, snapshot.SessionStartedAtUnixNano)
+	} else if snapshot.Status != StatusIdle {
+		if snapshot.Status == StatusRunning {
+			t.sessionStartedAt = time.Unix(0, snapshot.StartedAtUnixNano).Add(-snapshot.Elapsed)
+		} else {
+			t.sessionStartedAt = t.clock.Now().Add(-snapshot.Elapsed)
+		}
+	}
 	if snapshot.Status == StatusRunning {
 		t.startedAt = time.Unix(0, snapshot.StartedAtUnixNano)
 	}
 	t.refresh()
 	return nil
+}
+
+func timestampOrZero(value time.Time) int64 {
+	if value.IsZero() {
+		return 0
+	}
+	return value.UnixNano()
 }
 
 func (t *Timer) refresh() {

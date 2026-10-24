@@ -58,11 +58,11 @@ func TestOpenDatabaseAppliesMigrations(t *testing.T) {
 	}
 
 	var version int
-	if err := db.QueryRowContext(ctx, "SELECT version FROM schema_migrations").Scan(&version); err != nil {
+	if err := db.QueryRowContext(ctx, "SELECT MAX(version) FROM schema_migrations").Scan(&version); err != nil {
 		t.Fatalf("read applied migration version: %v", err)
 	}
-	if version != 1 {
-		t.Errorf("applied migration version = %d, want 1", version)
+	if version != 2 {
+		t.Errorf("applied migration version = %d, want 2", version)
 	}
 
 	var foreignKeys int
@@ -79,8 +79,20 @@ func TestOpenDatabaseAppliesMigrations(t *testing.T) {
 	if err := db.QueryRowContext(ctx, "SELECT COUNT(*) FROM schema_migrations").Scan(&version); err != nil {
 		t.Fatalf("count applied migrations: %v", err)
 	}
-	if version != 1 {
-		t.Errorf("migration count after applying again = %d, want 1", version)
+	if version != 2 {
+		t.Errorf("migration count after applying again = %d, want 2", version)
+	}
+
+	var completionKeyColumn bool
+	if err := db.QueryRowContext(ctx, `
+		SELECT EXISTS(
+			SELECT 1 FROM pragma_table_info('study_sessions') WHERE name = 'completion_key'
+		)
+	`).Scan(&completionKeyColumn); err != nil {
+		t.Fatalf("check completion key column: %v", err)
+	}
+	if !completionKeyColumn {
+		t.Fatal("migration did not add study_sessions.completion_key")
 	}
 }
 

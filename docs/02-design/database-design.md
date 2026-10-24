@@ -45,8 +45,11 @@ CREATE TABLE settings (
 end timestamps are UTC RFC 3339 text. `duration_seconds` is a non-negative
 whole-second duration and is stored separately from the timestamp interval
 because paused time may be excluded from the measured study duration.
+Automatically completed timer sessions have an optional unique
+`completion_key`, making retries safe; manual sessions leave it null.
 
-The session domain and SQLite repository use this existing table; no schema
-migration is needed for session model/persistence support.
+The session domain and SQLite repository use this table. Migration
+`0002_study_session_completion_key.sql` adds the idempotency key for automatic
+session completion records.
 
 The application uses the pure-Go [`modernc.org/sqlite`](https://pkg.go.dev/modernc.org/sqlite) driver to avoid requiring a C toolchain for Windows builds; see [ADR 0002](../../ai/decisions/0002-use-pure-go-sqlite-driver.md). Full-text search (FTS5) for notes remains an open design question.

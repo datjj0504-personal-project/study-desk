@@ -174,6 +174,11 @@ func TestTimerRestoreCountsTimeAcrossSleepAndRestart(t *testing.T) {
 
 	pomodoroSnapshot := pomodoro.Snapshot()
 	stopwatchSnapshot := stopwatch.Snapshot()
+	wantSessionStart := clock.now.Add(-3 * time.Minute).UnixNano()
+	if pomodoroSnapshot.SessionStartedAtUnixNano != wantSessionStart ||
+		stopwatchSnapshot.SessionStartedAtUnixNano != wantSessionStart {
+		t.Errorf("session start timestamps = %d/%d, want %d", pomodoroSnapshot.SessionStartedAtUnixNano, stopwatchSnapshot.SessionStartedAtUnixNano, wantSessionStart)
+	}
 	restartedClock := &fakeClock{now: clock.now}
 	restartedPomodoro, err := NewPomodoro(restartedClock, durations)
 	if err != nil {
@@ -198,6 +203,56 @@ func TestTimerRestoreCountsTimeAcrossSleepAndRestart(t *testing.T) {
 	stopwatchState := restartedStopwatch.State()
 	if stopwatchState.Status != StatusRunning || stopwatchState.Elapsed != 11*time.Minute {
 		t.Errorf("stopwatch state after simulated sleep = %+v, want running at 11 minutes", stopwatchState)
+	}
+}
+
+func TestTimerSessionStartSurvivesPauseAndResume(t *testing.T) {
+	clock := &fakeClock{now: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)}
+	stopwatch, err := NewStopwatch(clock)
+	if err != nil {
+		t.Fatalf("NewStopwatch() returned an error: %v", err)
+	}
+	if err := stopwatch.Start(); err != nil {
+		t.Fatalf("Start() returned an error: %v", err)
+	}
+	startedAt := clock.now.UnixNano()
+	clock.Advance(5 * time.Second)
+	if err := stopwatch.Pause(); err != nil {
+		t.Fatalf("Pause() returned an error: %v", err)
+	}
+	if got := stopwatch.Snapshot().SessionStartedAtUnixNano; got != startedAt {
+		t.Errorf("session start after pause = %d, want %d", got, startedAt)
+	}
+	clock.Advance(time.Minute)
+	if err := stopwatch.Resume(); err != nil {
+		t.Fatalf("Resume() returned an error: %v", err)
+	}
+	if got := stopwatch.Snapshot().SessionStartedAtUnixNano; got != startedAt {
+		t.Errorf("session start after resume = %d, want %d", got, startedAt)
+	}
+}
+
+func TestRestoreDerivesSessionStartFromLegacyRunningSnapshot(t *testing.T) {
+	now := time.Date(2026, 1, 1, 0, 10, 0, 0, time.UTC)
+	clock := &fakeClock{now: now}
+	pomodoro, err := NewPomodoro(clock, Durations{
+		Focus: 25 * time.Minute, ShortBreak: 5 * time.Minute, LongBreak: 15 * time.Minute, LongBreakEvery: 4,
+	})
+	if err != nil {
+		t.Fatalf("NewPomodoro() returned an error: %v", err)
+	}
+	snapshot := Snapshot{
+		Mode: ModePomodoro, Phase: PhaseFocus, Status: StatusRunning,
+		Duration: 25 * time.Minute, Elapsed: 10 * time.Minute,
+		StartedAtUnixNano: now.UnixNano(),
+	}
+	if err := pomodoro.Restore(snapshot); err != nil {
+		t.Fatalf("Restore() legacy snapshot returned an error: %v", err)
+	}
+	got := pomodoro.Snapshot().SessionStartedAtUnixNano
+	want := now.Add(-10 * time.Minute).UnixNano()
+	if got != want {
+		t.Errorf("restored session start = %d, want %d", got, want)
 	}
 }
 

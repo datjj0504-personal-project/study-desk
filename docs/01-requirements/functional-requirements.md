@@ -23,7 +23,7 @@ Initial draft. IDs are stable references for tasks and tests.
 
 ## Study Sessions
 
-- FR-SS1: Record a session (start, end, duration, optional subject, optional note) when a focus timer or stopwatch completes.
+- FR-SS1: Record a session (start, end, duration, optional subject, optional note) when a focus timer completes or the user resets a used stopwatch.
 - FR-SS2: Add, edit, and delete sessions manually.
 - FR-SS3: List past sessions by date.
 
