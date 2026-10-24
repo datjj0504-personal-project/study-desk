@@ -1,6 +1,6 @@
 # StudyDesk Project Status
 
-Single source of truth for progress. Last updated: 2026-10-24 (P2-002 marked done).
+Single source of truth for progress. Last updated: 2026-10-24 (P2-003 marked done).
 
 ## A. Project Overview
 
@@ -67,13 +67,19 @@ Single source of truth for progress. Last updated: 2026-10-24 (P2-002 marked don
 - **Validation:** `go test ./...`, `go vet ./...`, `go build ./...`, and `git diff --check` passed.
 - **Files:** `app.go`, `main.go`, `migrations/{embed.go,0001_init.sql,README.md}`, `internal/storage/{sqlite.go,sqlite_test.go,README.md}`, `docs/02-design/database-design.md`.
 
+### P2-003: Persistence and storage tests
+- **Completed:** 2026-10-24
+- **Summary:** Expanded SQLite integration coverage to verify subjects, notes, study sessions, and settings persist after closing and reopening a file database. Added checks for unique names, valid session kinds and durations, foreign-key enforcement and `ON DELETE SET NULL`, plus transactional rollback when a migration fails.
+- **Validation:** `go test ./...`, `go vet ./...`, `go build ./...`, and `git diff --check` passed.
+- **Files:** `internal/storage/sqlite_test.go`, `docs/04-testing/testing-strategy.md`.
+
 ## D. Current Task
 
 No task is currently in progress.
 
 ## E. Remaining Tasks and Roadmap
 
-Statuses: NOT_STARTED unless noted. P1-001 through P1-005 and P2-001 through P2-002 are complete.
+Statuses: NOT_STARTED unless noted. P1-001 through P1-005 and P2-001 through P2-003 are complete.
 
 **Phase 1 — Foundation**
 - P1-004: DONE (see C).
@@ -82,7 +88,7 @@ Statuses: NOT_STARTED unless noted. P1-001 through P1-005 and P2-001 through P2-
 **Phase 2 — Local Storage**
 - P2-001: DONE (see C).
 - P2-002: DONE (see C).
-- P2-003: Persistence and storage tests. Depends on: P2-002.
+- P2-003: DONE (see C).
 
 **Phase 3 — Notes**
 - P3-001: Note model and storage interface. Depends on: P2-002.
@@ -128,11 +134,11 @@ Statuses: NOT_STARTED unless noted. P1-001 through P1-005 and P2-001 through P2-
 
 ## G. Next Recommended Task
 
-**P2-003: Persistence and storage tests.**
+**P3-001: Note model and storage interface.**
 
-- **Why next:** The database is initialized and versioned; storage behavior needs broader persistence-level coverage before domain repositories are added.
+- **Why next:** The database schema and storage behavior are established, enabling a domain-level note model and repository contract.
 - **Prerequisites:** P2-002 done.
-- **Acceptance:** Storage tests cover persistence and migration behavior needed by upcoming features.
+- **Acceptance:** Define the note model and storage interface in line with the project architecture.
 
 ## H. Instructions for Future AI Sessions
 

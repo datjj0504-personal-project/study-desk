@@ -8,7 +8,7 @@
 
 ## Integration tests
 
-- Test `internal/storage` against a temporary SQLite file created per test, applying real [migrations](../../migrations/README.md).
+- Test `internal/storage` against temporary SQLite files created per test, applying real [migrations](../../migrations/README.md). Verify persistence after closing and reopening, schema constraints and foreign-key behavior, migration idempotence, and rollback on migration failure.
 - Place cross-package scenarios in [tests/](../../tests/README.md).
 
 ## Frontend tests
