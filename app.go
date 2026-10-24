@@ -121,6 +121,32 @@ func (a *App) ListNotes() ([]notes.Note, error) {
 	return result, nil
 }
 
+// CreateSubject creates a subject for organizing notes.
+func (a *App) CreateSubject(subject notes.Subject) (notes.Subject, error) {
+	repo, err := a.noteRepository()
+	if err != nil {
+		return notes.Subject{}, err
+	}
+	created, err := repo.CreateSubject(a.ctx, subject)
+	if err != nil {
+		return notes.Subject{}, fmt.Errorf("create subject: %w", err)
+	}
+	return created, nil
+}
+
+// ListSubjects returns available note subjects.
+func (a *App) ListSubjects() ([]notes.Subject, error) {
+	repo, err := a.noteRepository()
+	if err != nil {
+		return nil, err
+	}
+	result, err := repo.ListSubjects(a.ctx)
+	if err != nil {
+		return nil, fmt.Errorf("list subjects: %w", err)
+	}
+	return result, nil
+}
+
 func (a *App) noteRepository() (notes.Repository, error) {
 	if a.startupErr != nil {
 		return nil, fmt.Errorf("initialize local database: %w", a.startupErr)

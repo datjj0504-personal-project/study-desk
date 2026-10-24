@@ -11,4 +11,6 @@ type Repository interface {
 	Update(context.Context, Note) error
 	Delete(context.Context, int64) error
 	List(context.Context) ([]Note, error)
+	CreateSubject(context.Context, Subject) (Subject, error)
+	ListSubjects(context.Context) ([]Subject, error)
 }

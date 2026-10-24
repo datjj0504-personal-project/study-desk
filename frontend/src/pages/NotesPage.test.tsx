@@ -5,9 +5,11 @@ import { NotesPage } from "./NotesPage";
 const { api } = vi.hoisted(() => ({
   api: {
     createNote: vi.fn(),
+    createSubject: vi.fn(),
     deleteNote: vi.fn(),
     getNote: vi.fn(),
     listNotes: vi.fn(),
+    listSubjects: vi.fn(),
     updateNote: vi.fn(),
   },
 }));
@@ -19,8 +21,13 @@ afterEach(() => {
   vi.resetAllMocks();
 });
 
+function mockSubjects(subjects: { id: number; name: string }[] = []) {
+  api.listSubjects.mockResolvedValue(subjects);
+}
+
 describe("NotesPage", () => {
   it("loads, creates, and selects a note", async () => {
+    mockSubjects();
     api.listNotes.mockResolvedValueOnce([]).mockResolvedValue([
       { id: 1, title: "Revision", body: "Chapter one", createdAt: "", updatedAt: "" },
     ]);
@@ -44,6 +51,7 @@ describe("NotesPage", () => {
   });
 
   it("updates and deletes a selected note", async () => {
+    mockSubjects();
     api.listNotes.mockResolvedValue([
       { id: 4, title: "Existing", body: "Old body", createdAt: "", updatedAt: "" },
     ]);
@@ -73,6 +81,7 @@ describe("NotesPage", () => {
   });
 
   it("surfaces loading errors", async () => {
+    mockSubjects();
     api.listNotes.mockRejectedValue(new Error("storage failed"));
 
     render(<NotesPage />);
@@ -81,6 +90,7 @@ describe("NotesPage", () => {
   });
 
   it("autosaves changes after the user pauses typing", async () => {
+    mockSubjects();
     api.listNotes.mockResolvedValue([
       { id: 5, title: "Draft", body: "Old", createdAt: "", updatedAt: "" },
     ]);
@@ -105,6 +115,7 @@ describe("NotesPage", () => {
   });
 
   it("autosaves a new note after the title and body are entered", async () => {
+    mockSubjects();
     api.listNotes.mockResolvedValue([]);
     api.createNote.mockResolvedValue({
       id: 7,
@@ -130,6 +141,7 @@ describe("NotesPage", () => {
   });
 
   it("shows autosave failures and retries after another edit", async () => {
+    mockSubjects();
     api.listNotes.mockResolvedValue([
       { id: 6, title: "Draft", body: "Old", createdAt: "", updatedAt: "" },
     ]);
@@ -152,5 +164,60 @@ describe("NotesPage", () => {
     fireEvent.change(editor, { target: { value: "Retry" } });
     await waitFor(() => expect(api.updateNote).toHaveBeenCalledTimes(2), { timeout: 2000 });
     expect(await screen.findByText("Saved.")).toBeTruthy();
+  });
+
+  it("filters notes by title/body and subject", async () => {
+    mockSubjects([{ id: 1, name: "Physics" }, { id: 2, name: "History" }]);
+    api.listNotes.mockResolvedValue([
+      { id: 1, title: "Motion", body: "Force and velocity", subjectId: 1, createdAt: "", updatedAt: "" },
+      { id: 2, title: "Ancient cities", body: "Motion of empires", subjectId: 2, createdAt: "", updatedAt: "" },
+    ]);
+
+    render(<NotesPage />);
+    await screen.findAllByRole("listitem");
+    expect(screen.getAllByRole("listitem")).toHaveLength(2);
+
+    fireEvent.change(screen.getByRole("searchbox", { name: "Search notes" }), {
+      target: { value: "VELOCITY" },
+    });
+    expect(screen.getAllByRole("listitem")).toHaveLength(1);
+    expect(screen.getAllByRole("listitem")[0].textContent).toContain("Motion");
+
+    fireEvent.change(screen.getByLabelText("Search notes"), { target: { value: "" } });
+    fireEvent.change(screen.getByLabelText("Filter by subject"), { target: { value: "2" } });
+    expect(screen.getAllByRole("listitem")).toHaveLength(1);
+    expect(screen.getAllByRole("listitem")[0].textContent).toContain("Ancient cities");
+  });
+
+  it("creates and assigns a subject to the selected note", async () => {
+    mockSubjects([]);
+    api.listNotes.mockResolvedValue([
+      { id: 8, title: "Study", body: "Read", createdAt: "", updatedAt: "" },
+    ]);
+    api.createSubject.mockResolvedValue({ id: 9, name: "Biology" });
+    api.updateNote.mockResolvedValue(undefined);
+    api.getNote.mockResolvedValue({
+      id: 8,
+      title: "Study",
+      body: "Read",
+      subjectId: 9,
+      createdAt: "",
+      updatedAt: "",
+    });
+
+    render(<NotesPage />);
+    fireEvent.change(await screen.findByLabelText("Add a subject"), {
+      target: { value: "Biology" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Add" }));
+
+    expect(api.createSubject).toHaveBeenCalledWith("Biology");
+    await waitFor(() =>
+      expect(api.updateNote).toHaveBeenCalledWith(
+        expect.objectContaining({ id: 8, subjectId: 9 }),
+      ),
+      { timeout: 2000 },
+    );
+    expect(await screen.findAllByRole("option", { name: "Biology" })).toHaveLength(2);
   });
 });

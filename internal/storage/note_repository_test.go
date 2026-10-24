@@ -99,6 +99,7 @@ func TestNoteRepositoryRejectsInvalidNotesAndMissingUpdates(t *testing.T) {
 	if err != nil {
 		t.Fatalf("OpenDatabase() returned an error: %v", err)
 	}
+
 	t.Cleanup(func() {
 		if err := db.Close(); err != nil {
 			t.Errorf("close SQLite database: %v", err)
@@ -114,5 +115,58 @@ func TestNoteRepositoryRejectsInvalidNotesAndMissingUpdates(t *testing.T) {
 	}
 	if _, err := repo.GetByID(ctx, 1); !errors.Is(err, notes.ErrNotFound) {
 		t.Errorf("GetByID() for missing note error = %v, want %v", err, notes.ErrNotFound)
+	}
+}
+
+func TestNoteRepositorySubjects(t *testing.T) {
+	ctx := context.Background()
+	db, err := OpenDatabase(ctx, ":memory:")
+	if err != nil {
+		t.Fatalf("OpenDatabase() returned an error: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := db.Close(); err != nil {
+			t.Errorf("close SQLite database: %v", err)
+		}
+	})
+	repo := NewNoteRepository(db)
+
+	created, err := repo.CreateSubject(ctx, notes.Subject{Name: "  Physics  "})
+	if err != nil {
+		t.Fatalf("CreateSubject() returned an error: %v", err)
+	}
+	if created.ID == 0 || created.Name != "Physics" {
+		t.Errorf("CreateSubject() = %+v, want a generated ID and trimmed name", created)
+	}
+	if _, err := repo.CreateSubject(ctx, notes.Subject{Name: "   "}); !errors.Is(err, notes.ErrInvalidSubject) {
+		t.Errorf("CreateSubject() for blank name error = %v, want %v", err, notes.ErrInvalidSubject)
+	}
+	if _, err := repo.CreateSubject(ctx, notes.Subject{Name: "Physics"}); err == nil {
+		t.Fatal("CreateSubject() accepted a duplicate subject name")
+	}
+	if _, err := repo.CreateSubject(ctx, notes.Subject{Name: "Biology"}); err != nil {
+		t.Fatalf("CreateSubject() second subject returned an error: %v", err)
+	}
+	createdNote, err := repo.Create(ctx, notes.Note{
+		Title:     "Motion",
+		SubjectID: &created.ID,
+	})
+	if err != nil {
+		t.Fatalf("Create() with subject returned an error: %v", err)
+	}
+	gotNote, err := repo.GetByID(ctx, createdNote.ID)
+	if err != nil {
+		t.Fatalf("GetByID() for subject note returned an error: %v", err)
+	}
+	if gotNote.SubjectID == nil || *gotNote.SubjectID != created.ID {
+		t.Errorf("persisted note subject ID = %v, want %d", gotNote.SubjectID, created.ID)
+	}
+
+	subjects, err := repo.ListSubjects(ctx)
+	if err != nil {
+		t.Fatalf("ListSubjects() returned an error: %v", err)
+	}
+	if len(subjects) != 2 || subjects[0].Name != "Biology" || subjects[1].Name != "Physics" {
+		t.Errorf("ListSubjects() = %+v, want alphabetical subjects", subjects)
 	}
 }

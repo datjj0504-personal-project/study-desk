@@ -42,3 +42,12 @@ func TestNoteValidate(t *testing.T) {
 		})
 	}
 }
+
+func TestSubjectValidate(t *testing.T) {
+	if err := (Subject{Name: "Physics"}).Validate(); err != nil {
+		t.Errorf("Validate() returned an error for a named subject: %v", err)
+	}
+	if err := (Subject{Name: " \t"}).Validate(); !errors.Is(err, ErrInvalidSubject) {
+		t.Errorf("Validate() error = %v, want %v", err, ErrInvalidSubject)
+	}
+}

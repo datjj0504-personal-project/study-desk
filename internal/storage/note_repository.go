@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"studydesk/internal/notes"
@@ -118,6 +119,49 @@ func (r *NoteRepository) List(ctx context.Context) ([]notes.Note, error) {
 		return nil, fmt.Errorf("iterate notes: %w", err)
 	}
 	return result, nil
+}
+
+// CreateSubject stores a subject and returns its generated ID.
+func (r *NoteRepository) CreateSubject(ctx context.Context, subject notes.Subject) (notes.Subject, error) {
+	if err := subject.Validate(); err != nil {
+		return notes.Subject{}, err
+	}
+	subject.Name = strings.TrimSpace(subject.Name)
+	result, err := r.db.ExecContext(ctx,
+		"INSERT INTO subjects (name, created_at) VALUES (?, ?)",
+		subject.Name,
+		time.Now().UTC().Format(sqliteTimestampLayout),
+	)
+	if err != nil {
+		return notes.Subject{}, fmt.Errorf("create subject: %w", err)
+	}
+	subject.ID, err = result.LastInsertId()
+	if err != nil {
+		return notes.Subject{}, fmt.Errorf("get created subject ID: %w", err)
+	}
+	return subject, nil
+}
+
+// ListSubjects returns all subjects ordered alphabetically by name.
+func (r *NoteRepository) ListSubjects(ctx context.Context) ([]notes.Subject, error) {
+	rows, err := r.db.QueryContext(ctx, "SELECT id, name FROM subjects ORDER BY name COLLATE NOCASE, id")
+	if err != nil {
+		return nil, fmt.Errorf("list subjects: %w", err)
+	}
+	defer rows.Close()
+
+	subjects := make([]notes.Subject, 0)
+	for rows.Next() {
+		var subject notes.Subject
+		if err := rows.Scan(&subject.ID, &subject.Name); err != nil {
+			return nil, fmt.Errorf("scan subject: %w", err)
+		}
+		subjects = append(subjects, subject)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate subjects: %w", err)
+	}
+	return subjects, nil
 }
 
 type noteScanner interface {

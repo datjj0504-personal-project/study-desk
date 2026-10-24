@@ -7,9 +7,24 @@ import (
 )
 
 var (
-	ErrInvalidNote = errors.New("invalid note")
-	ErrNotFound    = errors.New("note not found")
+	ErrInvalidNote    = errors.New("invalid note")
+	ErrNotFound       = errors.New("note not found")
+	ErrInvalidSubject = errors.New("invalid subject")
 )
+
+// Subject groups notes for organization.
+type Subject struct {
+	ID   int64  `json:"id"`
+	Name string `json:"name"`
+}
+
+// Validate checks the fields required for a subject.
+func (s Subject) Validate() error {
+	if strings.TrimSpace(s.Name) == "" {
+		return ErrInvalidSubject
+	}
+	return nil
+}
 
 // Note is a persisted study note.
 type Note struct {

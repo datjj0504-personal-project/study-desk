@@ -1,8 +1,10 @@
 import {
   CreateNote,
+  CreateSubject,
   DeleteNote,
   GetNote,
   ListNotes,
+  ListSubjects,
   UpdateNote,
 } from "../../wailsjs/go/main/App";
 import { notes as generatedNotes } from "../../wailsjs/go/models";
@@ -22,12 +24,17 @@ export interface NoteInput {
   subjectId?: number;
 }
 
+export interface Subject {
+  id: number;
+  name: string;
+}
+
 function toNote(note: generatedNotes.Note): Note {
   return {
     id: note.id,
     title: note.title,
     body: note.body,
-    subjectId: note.subjectId,
+    subjectId: note.subjectId ?? undefined,
     createdAt: String(note.createdAt),
     updatedAt: String(note.updatedAt),
   };
@@ -57,4 +64,16 @@ export async function updateNote(note: Note): Promise<void> {
 
 export async function deleteNote(id: number): Promise<void> {
   await DeleteNote(id);
+}
+
+export async function listSubjects(): Promise<Subject[]> {
+  return (await ListSubjects()).map((subject) => ({
+    id: subject.id,
+    name: subject.name,
+  }));
+}
+
+export async function createSubject(name: string): Promise<Subject> {
+  const subject = await CreateSubject(new generatedNotes.Subject({ name }));
+  return { id: subject.id, name: subject.name };
 }

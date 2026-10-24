@@ -1,12 +1,22 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { createNote, deleteNote, getNote, listNotes, updateNote } from "./notes";
+import {
+  createNote,
+  createSubject,
+  deleteNote,
+  getNote,
+  listNotes,
+  listSubjects,
+  updateNote,
+} from "./notes";
 
 const { bindings } = vi.hoisted(() => ({
   bindings: {
     CreateNote: vi.fn(),
+    CreateSubject: vi.fn(),
     DeleteNote: vi.fn(),
     GetNote: vi.fn(),
     ListNotes: vi.fn(),
+    ListSubjects: vi.fn(),
     UpdateNote: vi.fn(),
   },
 }));
@@ -15,6 +25,9 @@ vi.mock("../../wailsjs/go/main/App", () => bindings);
 vi.mock("../../wailsjs/go/models", () => ({
   notes: {
     Note: class {
+      constructor(public source: Record<string, unknown>) {}
+    },
+    Subject: class {
       constructor(public source: Record<string, unknown>) {}
     },
   },
@@ -27,7 +40,7 @@ afterEach(() => {
 describe("notes service", () => {
   it("maps list binding results to frontend notes", async () => {
     bindings.ListNotes.mockResolvedValue([
-      { id: 2, title: "Note", body: "Body", createdAt: "created", updatedAt: "updated" },
+      { id: 2, title: "Note", body: "Body", subjectId: null, createdAt: "created", updatedAt: "updated" },
     ]);
 
     await expect(listNotes()).resolves.toEqual([
@@ -68,5 +81,13 @@ describe("notes service", () => {
     bindings.ListNotes.mockRejectedValue(new Error("database unavailable"));
 
     await expect(listNotes()).rejects.toThrow("database unavailable");
+  });
+
+  it("wraps subject bindings", async () => {
+    bindings.CreateSubject.mockResolvedValue({ id: 3, name: "Biology" });
+    bindings.ListSubjects.mockResolvedValue([{ id: 3, name: "Biology" }]);
+
+    await expect(createSubject("Biology")).resolves.toEqual({ id: 3, name: "Biology" });
+    await expect(listSubjects()).resolves.toEqual([{ id: 3, name: "Biology" }]);
   });
 });

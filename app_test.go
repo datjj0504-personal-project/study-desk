@@ -63,6 +63,21 @@ func TestAppNoteCRUD(t *testing.T) {
 	if len(listed) != 1 || listed[0].Body != "Edited content" {
 		t.Errorf("ListNotes() = %+v, want one updated note", listed)
 	}
+	subject, err := app.CreateSubject(notes.Subject{Name: "Physics"})
+	if err != nil {
+		t.Fatalf("CreateSubject() returned an error: %v", err)
+	}
+	got.SubjectID = &subject.ID
+	if err := app.UpdateNote(got); err != nil {
+		t.Fatalf("UpdateNote() assigning subject returned an error: %v", err)
+	}
+	subjects, err := app.ListSubjects()
+	if err != nil {
+		t.Fatalf("ListSubjects() returned an error: %v", err)
+	}
+	if len(subjects) != 1 || subjects[0].ID != subject.ID {
+		t.Errorf("ListSubjects() = %+v, want created subject %+v", subjects, subject)
+	}
 
 	if err := app.DeleteNote(created.ID); err != nil {
 		t.Fatalf("DeleteNote() returned an error: %v", err)

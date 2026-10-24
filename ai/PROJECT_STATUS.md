@@ -1,6 +1,6 @@
 # StudyDesk Project Status
 
-Single source of truth for progress. Last updated: 2026-10-24 (P3-004 marked done).
+Single source of truth for progress. Last updated: 2026-10-24 (P3-005 marked done).
 
 ## A. Project Overview
 
@@ -18,7 +18,7 @@ Single source of truth for progress. Last updated: 2026-10-24 (P3-004 marked don
 | Frontend | IN_PROGRESS | Dashboard and Notes page are implemented; timer, stopwatch, statistics, and settings remain placeholders. |
 | Wails integration | DONE | Wails CLI v2.17.0, `wails doctor` passes, `wails build` succeeds, bindings generated, `GetAppInfo` round trip accepted by the user. |
 | Database | DONE | Pure-Go SQLite driver, app-data initialization, and versioned schema migrations are implemented. |
-| Notes feature | IN_PROGRESS | Note model, CRUD persistence, backend bindings, list/editor UI, and autosave exist; search remains. |
+| Notes feature | IN_PROGRESS | Note search and subject organization are implemented alongside CRUD and autosave; final notes validation remains. |
 | Timer and stopwatch | NOT_STARTED | Placeholder UI only. |
 | Testing | IN_PROGRESS | Go storage/domain and frontend service/page tests are in place; expand coverage as features land. |
 | Build and packaging | IN_PROGRESS | `wails build` produced `build/bin/studydesk.exe`, which launches. No installer. |
@@ -97,13 +97,19 @@ Single source of truth for progress. Last updated: 2026-10-24 (P3-004 marked don
 - **Validation:** `frontend: npm run test` (4 files, 13 tests), `frontend: npm run build`, and `git diff --check` passed.
 - **Files:** `frontend/src/pages/{NotesPage.tsx,NotesPage.test.tsx,README.md}`.
 
+### P3-005: Search, tags, organization
+- **Completed:** 2026-10-24
+- **Summary:** Added case-insensitive title/body search and subject filtering to the notes list. Implemented subject validation, create/list persistence, Wails methods and typed frontend service; notes can be assigned or unassigned from a subject, with subject names displayed in the list. Reused the existing subjects schema and added backend, app, frontend service and UI coverage.
+- **Validation:** `go test ./...`, `go vet ./...`, `go build ./...`, `frontend: npm run test` (4 files, 16 tests), `frontend: npm run build`, `wails build`, and `git diff --check` passed.
+- **Files:** `app.go`, `app_test.go`, `internal/notes/{note.go,repository.go,note_test.go,README.md}`, `internal/storage/{note_repository.go,note_repository_test.go,README.md}`, `frontend/src/{pages/{NotesPage.tsx,NotesPage.test.tsx,README.md},services/{notes.ts,notes.test.ts,README.md}}`.
+
 ## D. Current Task
 
 No task is currently in progress.
 
 ## E. Remaining Tasks and Roadmap
 
-Statuses: NOT_STARTED unless noted. P1-001 through P1-005, P2-001 through P2-003, and P3-001 through P3-004 are complete.
+Statuses: NOT_STARTED unless noted. P1-001 through P1-005, P2-001 through P2-003, and P3-001 through P3-005 are complete.
 
 **Phase 1 — Foundation**
 - P1-004: DONE (see C).
@@ -119,7 +125,7 @@ Statuses: NOT_STARTED unless noted. P1-001 through P1-005, P2-001 through P2-003
 - P3-002: DONE (see C).
 - P3-003: DONE (see C).
 - P3-004: DONE (see C).
-- P3-005: Search, tags, organization. Depends on: P3-002.
+- P3-005: DONE (see C).
 - P3-006: Notes tests and validation. Depends on: P3-002.
 
 **Phase 4 — Timer and Stopwatch**
@@ -158,11 +164,11 @@ Statuses: NOT_STARTED unless noted. P1-001 through P1-005, P2-001 through P2-003
 
 ## G. Next Recommended Task
 
-**P3-005: Search, tags, organization.**
+**P3-006: Notes tests and validation.**
 
-- **Why next:** Notes creation, persistence, editing, and autosave are in place; search and subject organization will make the collection easier to use.
+- **Why next:** The notes feature now includes persistence, search, subjects, and autosave; run a focused feature-level validation before moving to the next phase.
 - **Prerequisites:** P3-002 done.
-- **Acceptance:** Search notes by title/body and support the planned subject organization behavior.
+- **Acceptance:** Validate the notes workflows and address any regressions before marking the feature complete.
 
 ## H. Instructions for Future AI Sessions
 
