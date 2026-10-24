@@ -89,6 +89,25 @@ describe("NotesPage", () => {
     expect((await screen.findByRole("alert")).textContent).toContain("storage failed");
   });
 
+  it("does not show an empty state after a load failure and retries successfully", async () => {
+    mockSubjects();
+    api.listNotes
+      .mockRejectedValueOnce(new Error("storage unavailable"))
+      .mockResolvedValueOnce([
+        { id: 7, title: "Recovered note", body: "Loaded after retry", createdAt: "", updatedAt: "" },
+      ]);
+
+    render(<NotesPage />);
+    const alert = await screen.findByRole("alert");
+    expect(alert.textContent).toContain("storage unavailable");
+    expect(screen.queryByText("No saved notes yet.")).toBeNull();
+    expect((screen.getByRole("button", { name: "New note" }) as HTMLButtonElement).disabled).toBe(true);
+
+    fireEvent.click(screen.getByRole("button", { name: "Retry loading notes" }));
+    expect(await screen.findByRole("button", { name: /Recovered note/ })).toBeTruthy();
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
   it("autosaves changes after the user pauses typing", async () => {
     mockSubjects();
     api.listNotes.mockResolvedValue([

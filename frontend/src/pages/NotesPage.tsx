@@ -25,12 +25,15 @@ export function NotesPage() {
   const [subjectFilter, setSubjectFilter] = useState<number | null>(null);
   const [newSubjectName, setNewSubjectName] = useState("");
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const savingRef = useRef(false);
+  const mountedRef = useRef(false);
+  const loadRequestRef = useRef(0);
   const selectedNote = notes.find((note) => note.id === selectedId);
   const isDirty =
     selectedId === null
@@ -48,30 +51,37 @@ export function NotesPage() {
     return matchesSearch && (subjectFilter === null || note.subjectId === subjectFilter);
   });
 
-  useEffect(() => {
-    let active = true;
-    Promise.all([listNotes(), listSubjects()])
-      .then(([loadedNotes, loadedSubjects]) => {
-        if (!active) return;
-        setNotes(loadedNotes);
-        setSubjects(loadedSubjects);
-        if (loadedNotes.length > 0) {
-          setSelectedId(loadedNotes[0].id);
-          setTitle(loadedNotes[0].title);
-          setBody(loadedNotes[0].body);
-          setSubjectId(loadedNotes[0].subjectId ?? null);
-        }
-      })
-      .catch((loadError: unknown) => {
-        if (active) setError(toErrorMessage(loadError));
-      })
-      .finally(() => {
-        if (active) setLoading(false);
-      });
-    return () => {
-      active = false;
-    };
+  const loadNotes = useCallback(async () => {
+    const requestId = ++loadRequestRef.current;
+    setLoading(true);
+    setLoadError(null);
+    try {
+      const [loadedNotes, loadedSubjects] = await Promise.all([listNotes(), listSubjects()]);
+      if (!mountedRef.current || requestId !== loadRequestRef.current) return;
+      setNotes(loadedNotes);
+      setSubjects(loadedSubjects);
+      if (loadedNotes.length > 0) {
+        setSelectedId(loadedNotes[0].id);
+        setTitle(loadedNotes[0].title);
+        setBody(loadedNotes[0].body);
+        setSubjectId(loadedNotes[0].subjectId ?? null);
+      }
+    } catch (loadError) {
+      if (mountedRef.current && requestId === loadRequestRef.current) {
+        setLoadError(toErrorMessage(loadError));
+      }
+    } finally {
+      if (mountedRef.current && requestId === loadRequestRef.current) setLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    void loadNotes();
+    return () => {
+      mountedRef.current = false;
+    };
+  }, [loadNotes]);
 
   function selectNote(note: Note) {
     setSelectedId(note.id);
@@ -224,7 +234,7 @@ export function NotesPage() {
         <button
           type="button"
           onClick={startNewNote}
-          disabled={isDirty || saving}
+          disabled={isDirty || saving || loading || loadError !== null}
           className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50"
         >
           New note
@@ -235,6 +245,19 @@ export function NotesPage() {
         <p role="alert" className="mb-4 rounded-md border border-red-500/40 bg-red-950/40 p-3 text-sm text-red-200">
           {error}
         </p>
+      )}
+      {loadError && (
+        <div role="alert" className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-md border border-red-500/40 bg-red-950/40 p-3 text-sm text-red-200">
+          <span>Could not load notes: {loadError}</span>
+          <button
+            type="button"
+            onClick={() => void loadNotes()}
+            disabled={loading}
+            className="rounded border border-red-200/40 px-3 py-1.5 font-medium hover:bg-red-900/40 disabled:opacity-50"
+          >
+            {loading ? "Retrying…" : "Retry loading notes"}
+          </button>
+        </div>
       )}
       {saving ? (
         <p role="status" className="mb-4 text-sm text-slate-300">Saving…</p>
@@ -276,6 +299,8 @@ export function NotesPage() {
           </select>
           {loading ? (
             <p className="px-2 py-4 text-sm text-slate-400">Loading notes…</p>
+          ) : loadError ? (
+            <p className="px-2 py-4 text-sm text-slate-400">Notes are unavailable until they can be loaded.</p>
           ) : filteredNotes.length === 0 ? (
             <p className="px-2 py-4 text-sm text-slate-400">
               {notes.length === 0 ? "No saved notes yet." : "No notes match these filters."}
@@ -326,7 +351,7 @@ export function NotesPage() {
               />
               <button
                 type="submit"
-                disabled={!newSubjectName.trim()}
+                disabled={!newSubjectName.trim() || loading || loadError !== null}
                 className="rounded-md border border-edge px-3 py-1.5 text-sm hover:bg-edge disabled:opacity-50"
               >
                 Add
@@ -353,7 +378,7 @@ export function NotesPage() {
             }}
             required
             maxLength={200}
-            disabled={saving}
+            disabled={saving || loading || loadError !== null}
             placeholder="Note title"
             className="mb-4 rounded-md border border-edge bg-surface px-3 py-2 text-lg text-slate-100 outline-none focus:border-accent"
           />
@@ -370,7 +395,7 @@ export function NotesPage() {
               setStatusMessage(null);
             }}
             placeholder="Write your note…"
-            disabled={saving}
+            disabled={saving || loading || loadError !== null}
             className="min-h-48 flex-1 resize-y rounded-md border border-edge bg-surface px-3 py-2 text-sm leading-6 text-slate-100 outline-none focus:border-accent"
           />
           <label htmlFor="note-subject" className="mb-2 mt-4 text-sm font-medium text-slate-300">
@@ -385,7 +410,7 @@ export function NotesPage() {
               setError(null);
               setStatusMessage(null);
             }}
-            disabled={saving}
+            disabled={saving || loading || loadError !== null}
             className="rounded-md border border-edge bg-surface px-3 py-2 text-sm text-slate-100"
           >
             <option value="">No subject</option>
