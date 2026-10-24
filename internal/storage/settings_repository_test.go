@@ -43,6 +43,24 @@ func TestSettingsRepositoryDefaultsAndPersistence(t *testing.T) {
 	if got != want {
 		t.Errorf("persisted settings = %+v, want %+v", got, want)
 	}
+
+	theme, err := repo.LoadTheme(ctx)
+	if err != nil {
+		t.Fatalf("LoadTheme() returned an error: %v", err)
+	}
+	if theme != settings.DefaultTheme() {
+		t.Fatalf("LoadTheme() = %q, want default %q", theme, settings.DefaultTheme())
+	}
+	if err := repo.SaveTheme(ctx, settings.ThemeLight); err != nil {
+		t.Fatalf("SaveTheme() returned an error: %v", err)
+	}
+	theme, err = repo.LoadTheme(ctx)
+	if err != nil {
+		t.Fatalf("LoadTheme() after save returned an error: %v", err)
+	}
+	if theme != settings.ThemeLight {
+		t.Errorf("persisted theme = %q, want %q", theme, settings.ThemeLight)
+	}
 }
 
 func TestSettingsRepositoryRejectsInvalidAndCorruptSettings(t *testing.T) {
@@ -68,5 +86,14 @@ func TestSettingsRepositoryRejectsInvalidAndCorruptSettings(t *testing.T) {
 	}
 	if _, err := repo.LoadTimerSettings(ctx); err == nil {
 		t.Fatal("LoadTimerSettings() accepted malformed persisted data")
+	}
+	if err := repo.SaveTheme(ctx, settings.Theme("sepia")); !errors.Is(err, settings.ErrInvalidTheme) {
+		t.Errorf("SaveTheme() invalid error = %v, want %v", err, settings.ErrInvalidTheme)
+	}
+	if _, err := db.ExecContext(ctx, "INSERT INTO settings (key, value) VALUES (?, ?)", settingTheme, "sepia"); err != nil {
+		t.Fatalf("insert malformed theme: %v", err)
+	}
+	if _, err := repo.LoadTheme(ctx); !errors.Is(err, settings.ErrInvalidTheme) {
+		t.Errorf("LoadTheme() corrupt error = %v, want %v", err, settings.ErrInvalidTheme)
 	}
 }

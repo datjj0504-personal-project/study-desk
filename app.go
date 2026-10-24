@@ -416,6 +416,34 @@ func (a *App) UpdateTimerSettings(value settings.TimerSettings) error {
 	return nil
 }
 
+// GetTheme returns the persisted application theme preference.
+func (a *App) GetTheme() (settings.Theme, error) {
+	repo, err := a.settingsRepository()
+	if err != nil {
+		return "", err
+	}
+	theme, err := repo.LoadTheme(a.ctx)
+	if err != nil {
+		return "", fmt.Errorf("load theme: %w", err)
+	}
+	return theme, nil
+}
+
+// UpdateTheme persists the application theme preference.
+func (a *App) UpdateTheme(theme settings.Theme) error {
+	if err := theme.Validate(); err != nil {
+		return err
+	}
+	repo, err := a.settingsRepository()
+	if err != nil {
+		return err
+	}
+	if err := repo.SaveTheme(a.ctx, theme); err != nil {
+		return fmt.Errorf("save theme: %w", err)
+	}
+	return nil
+}
+
 // GetStopwatchState returns the current stopwatch status and elapsed time.
 func (a *App) GetStopwatchState() (StopwatchState, error) {
 	a.stopwatchMu.Lock()
@@ -620,14 +648,22 @@ func (a *App) pomodoroTimer() (*timer.Timer, error) {
 }
 
 func (a *App) timerSettingsRepository() (settings.Repository, error) {
-	if a.startupErr != nil {
-		return nil, fmt.Errorf("initialize local database: %w", a.startupErr)
+	repo, err := a.settingsRepository()
+	if err != nil {
+		return nil, err
 	}
 	if a.settingsErr != nil {
 		return nil, fmt.Errorf("load timer settings: %w", a.settingsErr)
 	}
+	return repo, nil
+}
+
+func (a *App) settingsRepository() (settings.Repository, error) {
+	if a.startupErr != nil {
+		return nil, fmt.Errorf("initialize local database: %w", a.startupErr)
+	}
 	if a.settingsRepo == nil || a.ctx == nil {
-		return nil, errors.New("timer settings are unavailable before application startup")
+		return nil, errors.New("application settings are unavailable before application startup")
 	}
 	return a.settingsRepo, nil
 }

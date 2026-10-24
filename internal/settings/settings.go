@@ -9,6 +9,28 @@ import (
 )
 
 var ErrInvalidSettings = errors.New("invalid timer settings")
+var ErrInvalidTheme = errors.New("invalid theme")
+
+type Theme string
+
+const (
+	ThemeSystem Theme = "system"
+	ThemeLight  Theme = "light"
+	ThemeDark   Theme = "dark"
+)
+
+func DefaultTheme() Theme {
+	return ThemeDark
+}
+
+func (theme Theme) Validate() error {
+	switch theme {
+	case ThemeSystem, ThemeLight, ThemeDark:
+		return nil
+	default:
+		return fmt.Errorf("%w: must be system, light, or dark", ErrInvalidTheme)
+	}
+}
 
 const (
 	minDurationMinutes = 1

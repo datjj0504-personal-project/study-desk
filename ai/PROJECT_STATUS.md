@@ -1,6 +1,6 @@
 # StudyDesk Project Status
 
-Single source of truth for progress. Last updated: 2026-10-24 (P5-004 marked done).
+Single source of truth for progress. Last updated: 2026-10-24 (P6-001 marked done).
 
 ## A. Project Overview
 
@@ -21,6 +21,7 @@ Single source of truth for progress. Last updated: 2026-10-24 (P5-004 marked don
 | Notes feature | DONE | Note CRUD, autosave, title/body search, subject organization, and feature tests are implemented. |
 | Study sessions | IN_PROGRESS | Session persistence, automatic completion recording, history browsing/filtering, and daily/weekly/all-time/by-subject statistics are implemented. |
 | Timer and stopwatch | IN_PROGRESS | Pomodoro and stopwatch controls, configurable persisted durations, completion notifications, restart recovery, and elapsed-time handling across sleep are implemented. |
+| User preferences | DONE | Timer settings and system/light/dark theme preferences persist locally; the selected theme is applied across the UI. |
 | Testing | IN_PROGRESS | Go storage/domain and frontend service/page tests are in place; expand coverage as features land. |
 | Build and packaging | IN_PROGRESS | `wails build` produced `build/bin/studydesk.exe`, which launches. No installer. |
 
@@ -164,13 +165,19 @@ Single source of truth for progress. Last updated: 2026-10-24 (P5-004 marked don
 - **Validation:** `go test ./... -count=1`, `go test -race ./internal/storage ./internal/study`, `go vet ./...`, `go build ./...`, `frontend: npm run test` (13 files, 41 tests), `frontend: npm run build`, `wails build`, and `git diff --check` passed.
 - **Files:** `app.go`, `app_test.go`, `frontend/src/{App.tsx,types/navigation.ts,pages/SessionHistoryPage.tsx,pages/SessionHistoryPage.test.tsx,services/sessions.ts,services/sessions.test.ts}`, `ai/PROJECT_STATUS.md`.
 
+### P6-001: Settings and theme preferences
+- **Completed:** 2026-10-24
+- **Summary:** Added persisted system/light/dark theme preference using the existing settings table and exposed it through Wails. Settings now provides a theme selector alongside Pomodoro durations and notification preferences; light/system themes adapt app surfaces, text, and form controls to the selected/OS theme. Dark remains the default to preserve the existing appearance.
+- **Validation:** `go test ./... -count=1`, `go vet ./...`, `frontend: npm run test` (13 files, 44 tests), `frontend: npm run build`, Wails binding generation, and `git diff --check` passed. Rendered UI was not visually inspected.
+- **Files:** `app.go`, `app_test.go`, `internal/settings/{settings.go,repository.go,settings_test.go,README.md}`, `internal/storage/settings_repository{.go,_test.go}`, `frontend/src/{App.tsx,index.css,pages/SettingsPage.tsx,pages/SettingsPage.test.tsx,services/settings.ts,services/settings.test.ts,services/README.md}`, `ai/PROJECT_STATUS.md`.
+
 ## D. Current Task
 
 No task is currently in progress.
 
 ## E. Remaining Tasks and Roadmap
 
-Statuses: NOT_STARTED unless noted. P1-001 through P1-005, P2-001 through P2-003, P3-001 through P3-006, P4-001 through P4-007, and P5-001 through P5-004 are complete.
+Statuses: NOT_STARTED unless noted. P1-001 through P1-005, P2-001 through P2-003, P3-001 through P3-006, P4-001 through P4-007, P5-001 through P5-004, and P6-001 are complete.
 
 **Phase 1 — Foundation**
 - P1-004: DONE (see C).
@@ -205,7 +212,7 @@ Statuses: NOT_STARTED unless noted. P1-001 through P1-005, P2-001 through P2-003
 - P5-004: DONE — Session history and tests. (see C)
 
 **Phase 6 — Polish and Release**
-- P6-001: Settings and theme preferences.
+- P6-001: DONE — Settings and theme preferences (see C).
 - P6-002: Error handling and UX improvements.
 - P6-003: Integration and regression testing.
 - P6-004: Windows production builds (`wails build`). Depends on: P1-005.
@@ -221,15 +228,15 @@ Statuses: NOT_STARTED unless noted. P1-001 through P1-005, P2-001 through P2-003
 - Root `package.json` is a minimal stub with `wails` scripts only.
 - SQLite uses `modernc.org/sqlite`, a pure-Go driver (see [ADR 0002](decisions/0002-use-pure-go-sqlite-driver.md)).
 - Decisions: [ADR 0001](decisions/0001-use-wails-go-react-sqlite.md), [ADR 0002](decisions/0002-use-pure-go-sqlite-driver.md). The Go package at the repo root is `main` (Wails convention).
-- Deferred: client-side routing library (simple state-based navigation for now); theme switching.
+- Deferred: client-side routing library (simple state-based navigation for now).
 
 ## G. Next Recommended Task
 
-**P6-001: Settings and theme preferences.**
+**P6-002: Error handling and UX improvements.**
 
-- **Why next:** Timer preferences are in place; finish the remaining settings and theme-preference work before release polish.
+- **Why next:** Improve user-facing error and loading states after adding the full settings and theme preference flows.
 - **Prerequisites:** None.
-- **Acceptance:** Persist and apply the remaining user-facing settings and theme preference.
+- **Acceptance:** Review key workflows for confusing or unhandled failures and improve the affected UX with regression tests.
 
 ## H. Instructions for Future AI Sessions
 

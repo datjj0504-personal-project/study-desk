@@ -349,6 +349,41 @@ func TestAppTimerSettingsPersistAndRequireIdleForDurationChanges(t *testing.T) {
 	}
 }
 
+func TestAppThemePreferencePersistsAndRejectsInvalidValues(t *testing.T) {
+	ctx := context.Background()
+	db, err := storage.OpenDatabase(ctx, ":memory:")
+	if err != nil {
+		t.Fatalf("OpenDatabase() returned an error: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := db.Close(); err != nil {
+			t.Errorf("close SQLite database: %v", err)
+		}
+	})
+	app := &App{ctx: ctx, settingsRepo: storage.NewSettingsRepository(db)}
+
+	theme, err := app.GetTheme()
+	if err != nil {
+		t.Fatalf("GetTheme() returned an error: %v", err)
+	}
+	if theme != settings.DefaultTheme() {
+		t.Fatalf("GetTheme() = %q, want default %q", theme, settings.DefaultTheme())
+	}
+	if err := app.UpdateTheme(settings.ThemeLight); err != nil {
+		t.Fatalf("UpdateTheme() returned an error: %v", err)
+	}
+	theme, err = app.GetTheme()
+	if err != nil {
+		t.Fatalf("GetTheme() after update returned an error: %v", err)
+	}
+	if theme != settings.ThemeLight {
+		t.Errorf("GetTheme() = %q, want %q", theme, settings.ThemeLight)
+	}
+	if err := app.UpdateTheme(settings.Theme("sepia")); !errors.Is(err, settings.ErrInvalidTheme) {
+		t.Errorf("UpdateTheme() invalid error = %v, want %v", err, settings.ErrInvalidTheme)
+	}
+}
+
 func TestAppRestoresTimersAfterRestartAndSleep(t *testing.T) {
 	ctx := context.Background()
 	db, err := storage.OpenDatabase(ctx, ":memory:")

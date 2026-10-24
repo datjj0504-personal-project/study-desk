@@ -16,6 +16,7 @@ const (
 	settingLongBreakMinutes     = "timer.long_break_minutes"
 	settingLongBreakEvery       = "timer.long_break_every"
 	settingNotificationsEnabled = "timer.notifications_enabled"
+	settingTheme                = "appearance.theme"
 )
 
 type SettingsRepository struct {
@@ -93,6 +94,34 @@ func (r *SettingsRepository) SaveTimerSettings(ctx context.Context, value settin
 	}
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("commit timer settings: %w", err)
+	}
+	return nil
+}
+
+func (r *SettingsRepository) LoadTheme(ctx context.Context) (settings.Theme, error) {
+	value, found, err := r.loadValue(ctx, settingTheme)
+	if err != nil {
+		return "", err
+	}
+	if !found {
+		return settings.DefaultTheme(), nil
+	}
+	theme := settings.Theme(value)
+	if err := theme.Validate(); err != nil {
+		return "", fmt.Errorf("load theme: %w", err)
+	}
+	return theme, nil
+}
+
+func (r *SettingsRepository) SaveTheme(ctx context.Context, theme settings.Theme) error {
+	if err := theme.Validate(); err != nil {
+		return err
+	}
+	if _, err := r.db.ExecContext(ctx, `
+		INSERT INTO settings (key, value) VALUES (?, ?)
+		ON CONFLICT(key) DO UPDATE SET value = excluded.value
+	`, settingTheme, string(theme)); err != nil {
+		return fmt.Errorf("save theme: %w", err)
 	}
 	return nil
 }

@@ -8,14 +8,21 @@ import { SessionHistoryPage } from "./pages/SessionHistoryPage";
 import { StatisticsPage } from "./pages/StatisticsPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { TimerPage } from "./pages/TimerPage";
-import { timerSettings, type TimerSettings } from "./services/settings";
+import {
+  themeSettings,
+  timerSettings,
+  type Theme,
+  type TimerSettings,
+} from "./services/settings";
 import { NAV_ITEMS, type PageId } from "./types/navigation";
 import { toErrorMessage } from "./utils/errors";
 
 function App() {
   const [page, setPage] = useState<PageId>("dashboard");
   const [settings, setSettings] = useState<TimerSettings | null>(null);
+  const [theme, setTheme] = useState<Theme | null>(null);
   const [settingsError, setSettingsError] = useState<string | null>(null);
+  const [themeError, setThemeError] = useState<string | null>(null);
   const [notificationMonitorError, setNotificationMonitorError] = useState<string | null>(null);
   const [notificationDeliveryError, setNotificationDeliveryError] = useState<string | null>(null);
   const [completionNotice, setCompletionNotice] = useState<string | null>(null);
@@ -31,10 +38,22 @@ function App() {
     }).catch((error: unknown) => {
       if (mounted) setSettingsError(toErrorMessage(error));
     });
+    void themeSettings.get().then((value) => {
+      if (mounted) {
+        setTheme(value);
+        setThemeError(null);
+      }
+    }).catch((error: unknown) => {
+      if (mounted) setThemeError(toErrorMessage(error));
+    });
     return () => {
       mounted = false;
     };
   }, []);
+
+  useEffect(() => {
+    if (theme) document.documentElement.dataset.theme = theme;
+  }, [theme]);
 
   const onPhaseCompletion = useCallback((phase: string) => {
     const label = phase === "focus"
@@ -71,6 +90,11 @@ function App() {
     if (!value.notificationsEnabled) setNotificationDeliveryError(null);
   }, []);
 
+  const onThemeChange = useCallback((value: Theme) => {
+    setTheme(value);
+    setThemeError(null);
+  }, []);
+
   return (
     <div className="flex h-full">
       <PomodoroNotificationMonitor
@@ -86,15 +110,15 @@ function App() {
               type="button"
               aria-label="Dismiss timer notification"
               onClick={() => setCompletionNotice(null)}
-              className="text-slate-400 hover:text-white"
+              className="text-slate-400 hover:text-slate-900"
             >
               Dismiss
             </button>
           </div>
         )}
-        {(settingsError || notificationDeliveryError || notificationMonitorError) && (
+        {(settingsError || themeError || notificationDeliveryError || notificationMonitorError) && (
           <p className="mb-5 rounded-md border border-red-500/40 bg-red-950/40 px-4 py-3 text-sm text-red-200" role="alert">
-            {settingsError ?? notificationDeliveryError ?? notificationMonitorError}
+            {settingsError ?? themeError ?? notificationDeliveryError ?? notificationMonitorError}
           </p>
         )}
         {page === "dashboard" ? (
@@ -106,7 +130,12 @@ function App() {
         ) : page === "stopwatch" ? (
           <TimerPage mode="stopwatch" />
         ) : page === "settings" ? (
-          <SettingsPage settings={settings} onSettingsChange={onSettingsChange} />
+          <SettingsPage
+            settings={settings}
+            onSettingsChange={onSettingsChange}
+            theme={theme}
+            onThemeChange={onThemeChange}
+          />
         ) : page === "sessions" ? (
           <SessionHistoryPage />
         ) : page === "statistics" ? (

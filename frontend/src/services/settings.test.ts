@@ -1,10 +1,12 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { timerSettings } from "./settings";
+import { themeSettings, timerSettings } from "./settings";
 
 const { bindings } = vi.hoisted(() => ({
   bindings: {
     GetTimerSettings: vi.fn(),
     UpdateTimerSettings: vi.fn(),
+    GetTheme: vi.fn(),
+    UpdateTheme: vi.fn(),
   },
 }));
 
@@ -41,5 +43,16 @@ describe("timer settings service", () => {
       longBreakEvery: 4,
       notificationsEnabled: false,
     })).rejects.toThrow("settings unavailable");
+  });
+
+  it("loads and saves the persisted theme preference", async () => {
+    bindings.GetTheme.mockResolvedValue("light");
+    bindings.UpdateTheme.mockResolvedValue(undefined);
+
+    await expect(themeSettings.get()).resolves.toBe("light");
+    await themeSettings.update("system");
+
+    expect(bindings.GetTheme).toHaveBeenCalledOnce();
+    expect(bindings.UpdateTheme).toHaveBeenCalledWith("system");
   });
 });

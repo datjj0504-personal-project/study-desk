@@ -40,3 +40,17 @@ func TestTimerSettingsValidate(t *testing.T) {
 		})
 	}
 }
+
+func TestThemeValidate(t *testing.T) {
+	for _, theme := range []Theme{ThemeSystem, ThemeLight, ThemeDark} {
+		if err := theme.Validate(); err != nil {
+			t.Errorf("Theme(%q).Validate() returned an error: %v", theme, err)
+		}
+	}
+	if err := Theme("sepia").Validate(); !errors.Is(err, ErrInvalidTheme) {
+		t.Errorf("Theme.Validate() error = %v, want %v", err, ErrInvalidTheme)
+	}
+	if got := DefaultTheme(); got != ThemeDark {
+		t.Errorf("DefaultTheme() = %q, want %q", got, ThemeDark)
+	}
+}
