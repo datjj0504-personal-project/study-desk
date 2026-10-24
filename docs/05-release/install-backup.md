@@ -7,19 +7,15 @@
 
 Go, Node.js, and the Wails CLI are only required to build StudyDesk from source; end users do not need them to run the prebuilt application.
 
-## Install and run
+## Install, update, and uninstall
 
-StudyDesk currently ships as a portable `studydesk.exe`. There is no MSI, setup wizard, automatic update mechanism, or uninstaller.
+Download `StudyDesk-Windows-x64-<version>.zip` from a trusted release and extract it. The archive contains `StudyDesk-Setup-<version>.exe`; run the installer and approve the Windows administrator prompt. The installer targets 64-bit Windows 10/11, installs under Program Files, creates a Start Menu shortcut, and offers an optional Desktop shortcut.
 
-1. Obtain `studydesk.exe` from a trusted release or build it from source as described below.
-2. Copy the executable to a stable folder writable by your Windows user, such as a folder under `%LOCALAPPDATA%`.
-3. Double-click `studydesk.exe` to launch StudyDesk.
+The installer bundles Microsoft's small [Evergreen WebView2 bootstrapper](https://learn.microsoft.com/en-us/microsoft-edge/webview2/concepts/evergreen-vs-fixed-version) and runs it silently. The bootstrapper installs or updates the shared WebView2 Runtime from Microsoft servers, so an internet connection is required if it must download the runtime. Windows 11 and many eligible Windows 10 machines already have the runtime, but the installer does not assume that.
 
-The first launch creates the local application data directory and SQLite database. If Windows reports that WebView2 is missing, install the Microsoft Edge WebView2 Runtime and relaunch StudyDesk.
+The first launch creates the local application data directory and SQLite database. The installer registers StudyDesk with Windows Apps/Programs for uninstall. Uninstall removes the app and shortcuts but leaves `%APPDATA%\StudyDesk` intact. To update, run the newer setup executable; the installer upgrades the same app installation and database migrations run when the app starts. Back up the data before updating.
 
-To update a portable installation, close StudyDesk and replace the executable with the newer trusted build in the same folder. The database is stored separately and is not removed by replacing the executable; back it up before an update. StudyDesk applies pending database migrations at startup.
-
-To remove the portable application, close it and delete the executable. This does not remove `%APPDATA%\StudyDesk`; the database remains available for a later reinstall or manual backup.
+There is no auto-updater. The installer is not code-signed; Windows SmartScreen or other security software may display an untrusted-publisher warning.
 
 ## User data location
 
@@ -80,34 +76,47 @@ Expand-Archive -LiteralPath $backupFile -DestinationPath $dataDirectory
 
 Launch StudyDesk after restoration and check that your notes and settings are present. Keep the recovery directory until the restored data has been verified.
 
-## Build a release executable
+## Build an installer and release ZIP
 
-On a Windows build machine, install the development prerequisites in [setup](../03-development/setup.md), then run from the repository root:
+On a Windows build machine, install:
+
+- Go **1.27.2 or later**, as required by `go.mod`.
+- Node.js LTS and npm.
+- Wails CLI **v2.17.0** (`go install github.com/wailsapp/wails/v2/cmd/wails@v2.17.0`).
+- Inno Setup 6 ([download](https://jrsoftware.org/isinfo.php)), with `ISCC.exe` on `PATH` or installed in its default `Program Files` folder.
+- Internet access to download the signed WebView2 bootstrapper during release and the Evergreen Runtime during installation.
+
+Then run from the repository root:
 
 ```powershell
-Set-Location frontend
-npm ci
-npm run test
-npm run build
-Set-Location ..
-go test ./...
-wails build
+.\build-tools\release-windows.ps1
 ```
 
-Wails also invokes the configured frontend install and production build during `wails build`; the explicit checks above make failures easier to diagnose before packaging. The generated Windows executable is:
+The script runs Go and frontend tests/builds, runs `wails build -platform windows/amd64`, downloads the WebView2 Evergreen bootstrapper from Microsoft and verifies its Authenticode signature, compiles [installer.iss](../../build/windows/installer.iss) with Inno Setup, and verifies the ZIP contains the generated installer. It reads the app version from the single `appVersion` constant in `app.go`; update that constant for a release rather than maintaining a second version.
 
 ```text
-build\bin\studydesk.exe
+release\
+  README.md
+  StudyDesk-Setup-<appVersion>.exe
+  StudyDesk-Windows-x64-<appVersion>.zip
 ```
 
-Test the executable on a Windows machine with WebView2 before distributing it. Current packaging limitations:
+The script stages intermediate files in a unique temporary directory. It only replaces the generated installer and ZIP with names matching the current app version and preserves other files already in `release/`. `build\bin\studydesk.exe` is generated by Wails and is not included as a separate portable artifact in the ZIP.
 
-- No installer, uninstaller, auto-updater, or code-signing configuration is provided.
-- Distribute the executable over a trusted channel and communicate its checksum separately if recipients need integrity verification.
-- Users are responsible for backing up their local database; it is not included with the executable.
+## Branding and release verification
 
-To calculate a SHA-256 checksum for a built executable:
+No StudyDesk-specific logo/icon is currently provided. The existing `build\appicon.png` is the Wails logo; it is deliberately not used as installer branding. The installer uses Inno Setup's default setup icon, and the Wails executable may still show its generated default application icon.
+
+The current environment has not been verified with a clean-machine install/uninstall test. Before publishing a release, install from the ZIP on a clean Windows 10/11 machine and verify WebView2 setup, app launch, Start Menu/Desktop shortcuts, Windows uninstall registration, and that uninstall preserves `%APPDATA%\StudyDesk\studydesk.db`.
+
+- No auto-updater or code-signing configuration is provided.
+- The installer configuration and release ZIP script are present, but actual installer compilation and clean-machine install/uninstall verification remain outstanding until Inno Setup and a test machine are available.
+- The installer is not signed. Distribute it over a trusted channel and communicate its checksum separately if recipients need integrity verification.
+- Users are responsible for backing up their local database; it is not included with the installer or ZIP.
+
+To calculate a SHA-256 checksum for the installer or ZIP:
 
 ```powershell
-Get-FileHash -Algorithm SHA256 -LiteralPath 'build\bin\studydesk.exe'
+Get-FileHash -Algorithm SHA256 -LiteralPath 'release\StudyDesk-Setup-<version>.exe'
+Get-FileHash -Algorithm SHA256 -LiteralPath 'release\StudyDesk-Windows-x64-<version>.zip'
 ```

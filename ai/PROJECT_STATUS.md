@@ -24,8 +24,9 @@ Single source of truth for progress. Last updated: 2026-10-24 (P6-005 marked don
 | User preferences | DONE | Timer settings and system/light/dark theme preferences persist locally; the selected theme is applied across the UI. |
 | Error recovery UX | DONE | Notes loading and preference initialization failures remain distinct from empty/success states and offer retry actions. |
 | Testing | DONE | Go unit/integration suites, race checks, vet/build, frontend suite, and production type/build checks pass; App preference/navigation regression coverage is included. |
-| Build and packaging | DONE | Windows/amd64 production build succeeds and creates `build/bin/studydesk.exe` (about 16.2 MB). No installer. |
-| Installation and data recovery | DONE | Portable executable install, `%APPDATA%` data location, and close-before-backup ZIP/restore instructions documented. |
+| Build and packaging | IN_PROGRESS | Wails executable builds; Inno Setup configuration and repeatable installer/ZIP script are added, but Inno Setup is unavailable here, so installer compilation and clean-machine checks remain pending. |
+| Installation and data recovery | DONE | Windows install, `%APPDATA%` data location, and close-before-backup ZIP/restore instructions documented; installer behavior still needs clean-machine validation. |
+| Windows installer release | IN_PROGRESS | Installer source, WebView2 bootstrapper packaging, and versioned ZIP workflow are configured; compilation and installation behavior are not yet verified. |
 
 ## C. Completed Tasks
 
@@ -197,13 +198,20 @@ Single source of truth for progress. Last updated: 2026-10-24 (P6-005 marked don
 - **Validation:** Manually checked paths and commands against `OpenAppDatabase`, `wails.json`, and the successful Windows production build; `git diff --check` passed. Documentation examples were not executed on a separate end-user machine.
 - **Files:** `README.md`, `docs/05-release/install-backup.md`, `docs/03-development/setup.md`, `docs/00-project-context/project-overview.md`, `docs/02-design/folder-structure.md`, `ai/PROJECT_STATUS.md`.
 
+### P6-006: Windows installer packaging and verification
+- **Status:** IN_PROGRESS
+- **Summary:** Added an Inno Setup installer for a per-machine Program Files install, Start Menu shortcut, optional Desktop shortcut, Windows uninstall registration, and WebView2 Evergreen bootstrapper. Added a PowerShell release pipeline that reads the sole version source (`appVersion` in `app.go`), builds/tests the app, verifies the Microsoft bootstrapper signature, compiles setup, creates a ZIP containing only that installer, and replaces only same-version release outputs. Added a tracked `release/` README; generated EXE/ZIP artifacts are ignored. No StudyDesk-branded icon is available; the existing appicon is Wails branding and is not used for installer branding.
+- **Environment:** Windows/amd64, Go 1.27.2, Wails CLI v2.17.0, Node.js 22.20.0, npm 10.9.3. Inno Setup 6 (`ISCC.exe`) is not installed.
+- **Validation:** `wails build` succeeded; Go tests passed; frontend tests passed (14 files, 47 tests) and production build passed; release script parsed and extracted version `0.1.0`; Microsoft bootstrapper download verified at 1,876,736 bytes with a valid Microsoft Corporation Authenticode signature; script correctly stops before building when Inno Setup is missing; `git diff --check` passed. Installer compilation, ZIP extraction of a real installer, clean-machine install/launch/shortcut/uninstall/data-retention tests remain BLOCKED because Inno Setup and an isolated Windows test machine are unavailable.
+- **Files:** `.gitignore`, `build/windows/installer.iss`, `build-tools/{README.md,release-windows.ps1}`, `release/README.md`, `README.md`, `docs/{00-project-context/project-overview.md,02-design/folder-structure.md,03-development/setup.md,05-release/install-backup.md}`, `ai/PROJECT_STATUS.md`.
+
 ## D. Current Task
 
-No task is currently in progress.
+P6-006 is partially implemented; installer creation and clean-machine verification require Inno Setup and a test machine.
 
 ## E. Remaining Tasks and Roadmap
 
-Statuses: NOT_STARTED unless noted. P1-001 through P1-005, P2-001 through P2-003, P3-001 through P3-006, P4-001 through P4-007, P5-001 through P5-004, and P6-001 through P6-005 are complete.
+Statuses: NOT_STARTED unless noted. P1-001 through P1-005, P2-001 through P2-003, P3-001 through P3-006, P4-001 through P4-007, P5-001 through P5-004, and P6-001 through P6-005 are complete. P6-006 is in progress.
 
 **Phase 1 — Foundation**
 - P1-004: DONE (see C).
@@ -243,6 +251,7 @@ Statuses: NOT_STARTED unless noted. P1-001 through P1-005, P2-001 through P2-003
 - P6-003: DONE — Integration and regression testing (see C).
 - P6-004: DONE — Windows production builds (see C).
 - P6-005: DONE — Install, backup, and release documentation (see C).
+- P6-006: IN_PROGRESS — Windows installer packaging and verification.
 
 ## F. Known Issues and Technical Decisions
 
@@ -258,7 +267,11 @@ Statuses: NOT_STARTED unless noted. P1-001 through P1-005, P2-001 through P2-003
 
 ## G. Next Recommended Task
 
-**No roadmap tasks remain.** Review release documentation and the generated executable, then add any future features or distribution tasks after agreement on scope.
+**P6-006: Windows installer packaging and verification.**
+
+- **Why next:** Produce and test the user-downloadable setup installer and ZIP.
+- **Prerequisites:** Install Inno Setup 6 (`ISCC.exe`) and provide an isolated Windows 10/11 test machine/VM.
+- **Acceptance:** Run `.\build-tools\release-windows.ps1`; verify installer and ZIP contents, clean install and app launch, Start Menu/optional Desktop shortcuts, Windows uninstall registration, and retention of `%APPDATA%\StudyDesk\studydesk.db` after uninstall.
 
 ## H. Instructions for Future AI Sessions
 

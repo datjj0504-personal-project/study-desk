@@ -20,4 +20,4 @@ See [functional requirements](../01-requirements/functional-requirements.md) and
 
 The foundation, local storage, notes, timer/stopwatch, study tracking, preferences, and Windows executable milestones are implemented. See [project status](../../ai/PROJECT_STATUS.md) for task-level progress.
 
-The Windows executable and end-user backup/restore instructions are available; an installer, uninstaller, auto-updater, and code signing are not currently configured. See [Windows installation, backup, and release](../05-release/install-backup.md).
+The Windows executable and end-user backup/restore instructions are available. An Inno Setup configuration and release ZIP script are present, but installer compilation and clean-machine install/uninstall verification are still pending. There is no auto-updater or code signing. See [Windows installation, backup, and release](../05-release/install-backup.md).

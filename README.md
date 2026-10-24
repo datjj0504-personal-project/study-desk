@@ -26,16 +26,16 @@ Details: [functional requirements](docs/01-requirements/functional-requirements.
 
 ## Running the Windows build
 
-The application requires Windows 10/11 and the Microsoft Edge WebView2 Runtime. No Go or Node.js installation is needed to run the prebuilt executable.
+The intended distribution is the Windows x64 installer ZIP. Extract it, run `StudyDesk-Setup-<version>.exe`, and follow the prompts. The installer creates a Start Menu shortcut and offers an optional Desktop shortcut. It also runs Microsoft's WebView2 Evergreen bootstrapper, so internet access may be required to install the runtime. The installer pipeline is configured but the installer has not yet been built or clean-machine tested.
 
-Download or build `studydesk.exe`, copy it to a folder writable by your Windows user, and launch it. StudyDesk currently ships as an executable, not an installer; see [installation, backup, and release instructions](docs/05-release/install-backup.md).
+StudyDesk stores its data separately under `%APPDATA%\StudyDesk`; uninstalling the application does not remove personal data. See [installation, backup, and release instructions](docs/05-release/install-backup.md) for backup/restore and current signing limitations.
 
 ## Development prerequisites
 
 - Windows 10/11 with WebView2 Runtime
-- Go (1.21+)
+- Go (1.27.2+)
 - Node.js (LTS) and npm
-- Wails CLI v2 (`go install github.com/wailsapp/wails/v2/cmd/wails@latest`)
+- Wails CLI v2.17.0 (`go install github.com/wailsapp/wails/v2/cmd/wails@v2.17.0`)
 
 Verify the toolchain with `wails doctor`. Full instructions: [development setup](docs/03-development/setup.md).
 
@@ -62,10 +62,10 @@ Strategy: [testing strategy](docs/04-testing/testing-strategy.md).
 ## Build
 
 ```powershell
-wails build
+.\build-tools\release-windows.ps1
 ```
 
-The Windows executable is written to `build/bin/studydesk.exe`. Build and release details: [installation, backup, and release instructions](docs/05-release/install-backup.md).
+The release script builds the Wails application, compiles an Inno Setup installer, and writes a ZIP containing that installer to `release/`. See [installation, backup, and release instructions](docs/05-release/install-backup.md) for build dependencies and details.
 
 ## Documentation
 

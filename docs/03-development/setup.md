@@ -3,14 +3,14 @@
 ## Prerequisites
 
 - Windows 10/11 (64-bit) with the WebView2 runtime
-- Go 1.21+ (`go version`)
+- Go 1.27.2+ (`go version`)
 - Node.js LTS and npm (`node --version`)
 - Wails CLI v2
 
 Install the Wails CLI (needs explicit approval on your machine):
 
 ```powershell
-go install github.com/wailsapp/wails/v2/cmd/wails@latest
+go install github.com/wailsapp/wails/v2/cmd/wails@v2.17.0
 wails doctor
 ```
 
