@@ -1,6 +1,6 @@
 # StudyDesk Project Status
 
-Single source of truth for progress. Last updated: 2026-10-24 (P2-003 marked done).
+Single source of truth for progress. Last updated: 2026-10-24 (P3-001 marked done).
 
 ## A. Project Overview
 
@@ -14,11 +14,11 @@ Single source of truth for progress. Last updated: 2026-10-24 (P2-003 marked don
 | Area | Status | Notes |
 | --- | --- | --- |
 | Project initialization | DONE | Structure, docs, and Wails app skeleton exist. |
-| Backend (Go) | IN_PROGRESS | `main.go`, `app.go` (`App` with `GetAppInfo`). No domain code. |
+| Backend (Go) | IN_PROGRESS | `App` adapter, SQLite initialization, and the initial notes domain contract exist; note persistence is not implemented yet. |
 | Frontend | IN_PROGRESS | UI shell with sidebar and placeholder pages; dashboard shows backend connection status. No feature logic. |
 | Wails integration | DONE | Wails CLI v2.17.0, `wails doctor` passes, `wails build` succeeds, bindings generated, `GetAppInfo` round trip accepted by the user. |
 | Database | DONE | Pure-Go SQLite driver, app-data initialization, and versioned schema migrations are implemented. |
-| Notes feature | NOT_STARTED | Placeholder UI only. |
+| Notes feature | IN_PROGRESS | Note model and repository contract are defined; persistence and UI remain. |
 | Timer and stopwatch | NOT_STARTED | Placeholder UI only. |
 | Testing | IN_PROGRESS | Initial Go and frontend tests are in place; expand coverage as features land. |
 | Build and packaging | IN_PROGRESS | `wails build` produced `build/bin/studydesk.exe`, which launches. No installer. |
@@ -73,13 +73,19 @@ Single source of truth for progress. Last updated: 2026-10-24 (P2-003 marked don
 - **Validation:** `go test ./...`, `go vet ./...`, `go build ./...`, and `git diff --check` passed.
 - **Files:** `internal/storage/sqlite_test.go`, `docs/04-testing/testing-strategy.md`.
 
+### P3-001: Note model and storage interface
+- **Completed:** 2026-10-24
+- **Summary:** Added the notes domain `Note` type with optional subject and timestamps, validation for non-blank titles, `ErrInvalidNote` and `ErrNotFound` sentinels, and a context-aware repository contract for create/read/update/delete/list operations. Documented repository semantics and added validation tests.
+- **Validation:** `go test ./...`, `go vet ./...`, `go build ./...`, and `git diff --check` passed.
+- **Files:** `internal/notes/{note.go,repository.go,note_test.go,README.md}`.
+
 ## D. Current Task
 
 No task is currently in progress.
 
 ## E. Remaining Tasks and Roadmap
 
-Statuses: NOT_STARTED unless noted. P1-001 through P1-005 and P2-001 through P2-003 are complete.
+Statuses: NOT_STARTED unless noted. P1-001 through P1-005, P2-001 through P2-003, and P3-001 are complete.
 
 **Phase 1 — Foundation**
 - P1-004: DONE (see C).
@@ -91,7 +97,7 @@ Statuses: NOT_STARTED unless noted. P1-001 through P1-005 and P2-001 through P2-
 - P2-003: DONE (see C).
 
 **Phase 3 — Notes**
-- P3-001: Note model and storage interface. Depends on: P2-002.
+- P3-001: DONE (see C).
 - P3-002: Notes CRUD. Depends on: P3-001.
 - P3-003: Notes list and editor UI. Depends on: P3-002, P1-004.
 - P3-004: Autosave and save-state indicators. Depends on: P3-003.
@@ -134,11 +140,11 @@ Statuses: NOT_STARTED unless noted. P1-001 through P1-005 and P2-001 through P2-
 
 ## G. Next Recommended Task
 
-**P3-001: Note model and storage interface.**
+**P3-002: Notes CRUD.**
 
-- **Why next:** The database schema and storage behavior are established, enabling a domain-level note model and repository contract.
-- **Prerequisites:** P2-002 done.
-- **Acceptance:** Define the note model and storage interface in line with the project architecture.
+- **Why next:** The note model and repository contract are defined, so SQLite storage and app-facing operations can now be implemented against them.
+- **Prerequisites:** P3-001 done.
+- **Acceptance:** Implement note create, read, update, delete, and list operations with tests.
 
 ## H. Instructions for Future AI Sessions
 
