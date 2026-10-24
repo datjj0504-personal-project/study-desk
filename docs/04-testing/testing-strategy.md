@@ -5,6 +5,7 @@
 - Cover domain logic in `internal/notes`, `timer`, `study`, `settings` with table-driven tests.
 - Use fakes of repository interfaces and an injected clock; no Wails or SQLite needed.
 - Run: `go test ./...`
+- Timer state coverage: `go test ./internal/timer -cover` and `go test -race ./internal/timer ./internal/storage`.
 
 ## Integration tests
 

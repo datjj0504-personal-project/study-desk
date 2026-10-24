@@ -14,7 +14,13 @@ phase. `Configure` can replace these durations while the timer is idle and
 resets the Pomodoro cycle; active or completed phases must be reset first.
 `Snapshot` and `Restore` preserve running and paused timers across app restarts,
 including the absolute timestamp needed to account for elapsed time while the
-app was closed.
+app was closed. Snapshot restoration validates mode, phase, status, durations,
+timestamps, elapsed time, and completed-session counts before applying state.
+
+`timer_test.go` covers phase transitions, exact completion boundaries,
+configuration validation, pause/resume/reset, restart and sleep simulation,
+snapshot restoration, and invalid snapshots. Run `go test ./internal/timer
+-cover` to measure domain coverage; it is currently above 90%.
 
 The app adapter exposes Pomodoro and stopwatch snapshots and controls through
 Wails. The UI can poll Pomodoro state to update the countdown; a snapshot

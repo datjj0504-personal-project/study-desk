@@ -283,7 +283,7 @@ func (t *Timer) Snapshot() Snapshot {
 func (t *Timer) Restore(snapshot Snapshot) error {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	if snapshot.Mode != t.mode || snapshot.Elapsed < 0 || snapshot.CompletedFocuses < 0 {
+	if snapshot.Mode != t.mode || snapshot.Elapsed < 0 || snapshot.Duration < 0 || snapshot.CompletedFocuses < 0 {
 		return fmt.Errorf("restore timer: %w: snapshot does not match timer configuration", ErrInvalidConfiguration)
 	}
 	switch snapshot.Status {
@@ -328,6 +328,9 @@ func (t *Timer) Restore(snapshot Snapshot) error {
 	}
 	if snapshot.Status != StatusRunning && snapshot.StartedAtUnixNano != 0 {
 		return fmt.Errorf("restore timer: %w: inactive snapshot has a start time", ErrInvalidConfiguration)
+	}
+	if snapshot.Status == StatusIdle && snapshot.Elapsed != 0 {
+		return fmt.Errorf("restore timer: %w: idle snapshot has elapsed time", ErrInvalidConfiguration)
 	}
 	t.phase = snapshot.Phase
 	t.status = snapshot.Status

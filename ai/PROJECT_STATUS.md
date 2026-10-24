@@ -1,6 +1,6 @@
 # StudyDesk Project Status
 
-Single source of truth for progress. Last updated: 2026-10-24 (P4-006 marked done).
+Single source of truth for progress. Last updated: 2026-10-24 (P4-007 marked done).
 
 ## A. Project Overview
 
@@ -133,13 +133,19 @@ Single source of truth for progress. Last updated: 2026-10-24 (P4-006 marked don
 - **Validation:** `go test ./... -count=1`, `go vet ./...`, `go build ./...`, `frontend: npm run test`, `frontend: npm run build`, `wails build`, and `git diff --check` passed.
 - **Files:** `app.go`, `app_test.go`, `internal/timer/{timer.go,repository.go,timer_test.go,README.md}`, `internal/storage/{timer_state_repository.go,timer_state_repository_test.go,README.md}`, `docs/04-testing/testing-strategy.md`, `ai/PROJECT_STATUS.md`.
 
+### P4-007: Timer tests and validation
+- **Completed:** 2026-10-24
+- **Summary:** Expanded timer domain and UI coverage for exact deadlines, paused/resumed/reset interactions, persisted-state restoration, corrupt snapshot rejection, and time across restart/sleep. Tightened snapshot validation so idle timers cannot restore with elapsed time.
+- **Validation:** `go test ./... -count=1`, `go test ./internal/timer -cover` (91.7%), `go test -race ./internal/timer ./internal/storage`, `go vet ./...`, `go build ./...`, `frontend: npm run test` (9 files, 32 tests), `frontend: npm run build`, `wails build`, and `git diff --check` passed.
+- **Files:** `internal/timer/{timer.go,timer_test.go,README.md}`, `frontend/src/pages/TimerPage.test.tsx`, `docs/04-testing/testing-strategy.md`, `ai/PROJECT_STATUS.md`.
+
 ## D. Current Task
 
 No task is currently in progress.
 
 ## E. Remaining Tasks and Roadmap
 
-Statuses: NOT_STARTED unless noted. P1-001 through P1-005, P2-001 through P2-003, P3-001 through P3-006, and P4-001 through P4-006 are complete.
+Statuses: NOT_STARTED unless noted. P1-001 through P1-005, P2-001 through P2-003, P3-001 through P3-006, and P4-001 through P4-007 are complete.
 
 **Phase 1 — Foundation**
 - P1-004: DONE (see C).
@@ -165,7 +171,7 @@ Statuses: NOT_STARTED unless noted. P1-001 through P1-005, P2-001 through P2-003
 - P4-004: DONE — Pomodoro and stopwatch UI with Wails controls and live snapshots. (see C)
 - P4-005: DONE — Notifications and configurable durations. (see C)
 - P4-006: DONE — App restart, sleep, timing accuracy. (see C)
-- P4-007: Timer tests and validation. Depends on: P4-002.
+- P4-007: DONE — Timer tests and validation. (see C)
 
 **Phase 5 — Study Tracking**
 - P5-001: Session model and persistence. Depends on: P2-002.

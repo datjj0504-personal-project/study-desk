@@ -94,4 +94,75 @@ describe("TimerPage", () => {
 
     await waitFor(() => expect(api.pomodoroTimer.advance).toHaveBeenCalledOnce());
   });
+
+  it("resumes a paused Pomodoro phase and refreshes its state", async () => {
+    api.pomodoroTimer.getState
+      .mockResolvedValueOnce({
+        phase: "short_break",
+        status: "paused",
+        durationMillis: 300_000,
+        elapsedMillis: 60_000,
+        remainingMillis: 240_000,
+        completedFocuses: 1,
+      })
+      .mockResolvedValue({
+        phase: "short_break",
+        status: "running",
+        durationMillis: 300_000,
+        elapsedMillis: 60_000,
+        remainingMillis: 240_000,
+        completedFocuses: 1,
+      });
+    api.pomodoroTimer.resume.mockResolvedValue(undefined);
+
+    render(<TimerPage mode="pomodoro" />);
+    expect(await screen.findByRole("button", { name: "Resume" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Resume" }));
+
+    expect(await screen.findByRole("button", { name: "Pause" })).toBeTruthy();
+    expect(api.pomodoroTimer.resume).toHaveBeenCalledOnce();
+  });
+
+  it("resets a completed Pomodoro phase to its initial focus state", async () => {
+    api.pomodoroTimer.getState
+      .mockResolvedValueOnce({
+        phase: "long_break",
+        status: "completed",
+        durationMillis: 900_000,
+        elapsedMillis: 900_000,
+        remainingMillis: 0,
+        completedFocuses: 4,
+      })
+      .mockResolvedValue({
+        phase: "focus",
+        status: "idle",
+        durationMillis: 1_500_000,
+        elapsedMillis: 0,
+        remainingMillis: 1_500_000,
+        completedFocuses: 0,
+      });
+    api.pomodoroTimer.reset.mockResolvedValue(undefined);
+
+    render(<TimerPage mode="pomodoro" />);
+    expect(await screen.findByRole("button", { name: "Next phase" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Reset" }));
+
+    expect(await screen.findByRole("button", { name: "Start" })).toBeTruthy();
+    expect(await screen.findByText("25:00")).toBeTruthy();
+    expect(api.pomodoroTimer.reset).toHaveBeenCalledOnce();
+  });
+
+  it("resets a stopwatch to zero", async () => {
+    api.stopwatchTimer.getState
+      .mockResolvedValueOnce({ status: "running", elapsedMillis: 12_345 })
+      .mockResolvedValue({ status: "idle", elapsedMillis: 0 });
+    api.stopwatchTimer.reset.mockResolvedValue(undefined);
+
+    render(<TimerPage mode="stopwatch" />);
+    expect(await screen.findByText("00:12")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Reset" }));
+
+    expect(await screen.findByText("00:00")).toBeTruthy();
+    expect(api.stopwatchTimer.reset).toHaveBeenCalledOnce();
+  });
 });
