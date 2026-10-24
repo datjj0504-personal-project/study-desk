@@ -1,6 +1,6 @@
 # StudyDesk Project Status
 
-Single source of truth for progress. Last updated: 2026-10-24 (P3-002 marked done).
+Single source of truth for progress. Last updated: 2026-10-24 (P3-003 marked done).
 
 ## A. Project Overview
 
@@ -15,12 +15,12 @@ Single source of truth for progress. Last updated: 2026-10-24 (P3-002 marked don
 | --- | --- | --- |
 | Project initialization | DONE | Structure, docs, and Wails app skeleton exist. |
 | Backend (Go) | IN_PROGRESS | `App` adapter, SQLite initialization, and notes persistence operations are implemented; other domains remain. |
-| Frontend | IN_PROGRESS | UI shell with sidebar and placeholder pages; dashboard shows backend connection status. No feature logic. |
+| Frontend | IN_PROGRESS | Dashboard and Notes page are implemented; timer, stopwatch, statistics, and settings remain placeholders. |
 | Wails integration | DONE | Wails CLI v2.17.0, `wails doctor` passes, `wails build` succeeds, bindings generated, `GetAppInfo` round trip accepted by the user. |
 | Database | DONE | Pure-Go SQLite driver, app-data initialization, and versioned schema migrations are implemented. |
-| Notes feature | IN_PROGRESS | Note model, CRUD persistence, and backend bindings exist; UI and search remain. |
+| Notes feature | IN_PROGRESS | Note model, CRUD persistence, backend bindings, and list/editor UI exist; search remains. |
 | Timer and stopwatch | NOT_STARTED | Placeholder UI only. |
-| Testing | IN_PROGRESS | Initial Go and frontend tests are in place; expand coverage as features land. |
+| Testing | IN_PROGRESS | Go storage/domain and frontend service/page tests are in place; expand coverage as features land. |
 | Build and packaging | IN_PROGRESS | `wails build` produced `build/bin/studydesk.exe`, which launches. No installer. |
 
 ## C. Completed Tasks
@@ -85,13 +85,19 @@ Single source of truth for progress. Last updated: 2026-10-24 (P3-002 marked don
 - **Validation:** `go test ./...`, `go vet ./...`, `go build ./...`, `wails build` (including bound note model/binding generation), and `git diff --check` passed.
 - **Files:** `app.go`, `app_test.go`, `internal/notes/{note.go,README.md}`, `internal/storage/{note_repository.go,note_repository_test.go,README.md}`.
 
+### P3-003: Notes list and editor UI
+- **Completed:** 2026-10-24
+- **Summary:** Added the Notes page with a recent-first note list, selection, new-note editor, explicit create/update actions, confirmed deletion, and unsaved-change protection. Added a typed frontend service over Wails bindings, loading/error/success states, and service/page tests; connected Notes navigation and updated dashboard copy.
+- **Validation:** `frontend: npm run test` (4 files, 10 tests), `frontend: npm run build`, `wails build`, and `git diff --check` passed.
+- **Files:** `frontend/src/{App.tsx,pages/{NotesPage.tsx,NotesPage.test.tsx,DashboardPage.tsx,README.md},services/{notes.ts,notes.test.ts,README.md}}`.
+
 ## D. Current Task
 
 No task is currently in progress.
 
 ## E. Remaining Tasks and Roadmap
 
-Statuses: NOT_STARTED unless noted. P1-001 through P1-005, P2-001 through P2-003, and P3-001 through P3-002 are complete.
+Statuses: NOT_STARTED unless noted. P1-001 through P1-005, P2-001 through P2-003, and P3-001 through P3-003 are complete.
 
 **Phase 1 — Foundation**
 - P1-004: DONE (see C).
@@ -105,7 +111,7 @@ Statuses: NOT_STARTED unless noted. P1-001 through P1-005, P2-001 through P2-003
 **Phase 3 — Notes**
 - P3-001: DONE (see C).
 - P3-002: DONE (see C).
-- P3-003: Notes list and editor UI. Depends on: P3-002, P1-004.
+- P3-003: DONE (see C).
 - P3-004: Autosave and save-state indicators. Depends on: P3-003.
 - P3-005: Search, tags, organization. Depends on: P3-002.
 - P3-006: Notes tests and validation. Depends on: P3-002.
@@ -137,7 +143,7 @@ Statuses: NOT_STARTED unless noted. P1-001 through P1-005, P2-001 through P2-003
 - `frontend/wailsjs/` is git-ignored and generated; a fresh clone needs `wails dev`, `wails build`, or `wails generate module` before `npm run build` can type-check `services/appInfo.ts`.
 - `build/` now contains CLI-generated icon and Windows manifest (previously missing).
 - `frontend/package.json.md5` is a Wails artifact and is git-ignored.
-- Test coverage is currently limited to `GetAppInfo`, error-message conversion, and backend connection status; feature-specific tests remain future work.
+- Automated coverage includes SQLite persistence, note CRUD, frontend service wrappers, and Notes page workflows; broader integration and feature coverage remain future work.
 - Rendered UI has not been visually verified.
 - Root `package.json` is a minimal stub with `wails` scripts only.
 - SQLite uses `modernc.org/sqlite`, a pure-Go driver (see [ADR 0002](decisions/0002-use-pure-go-sqlite-driver.md)).
@@ -146,11 +152,11 @@ Statuses: NOT_STARTED unless noted. P1-001 through P1-005, P2-001 through P2-003
 
 ## G. Next Recommended Task
 
-**P3-003: Notes list and editor UI.**
+**P3-004: Autosave and save-state indicators.**
 
-- **Why next:** Backend note CRUD is available through Wails bindings and can now support the Notes page.
-- **Prerequisites:** P3-002 and P1-004 done.
-- **Acceptance:** Provide a notes list and editor UI that uses the backend operations.
+- **Why next:** The Notes page is usable with explicit saves; autosave and clearer persistence state are the next focused improvement.
+- **Prerequisites:** P3-003 done.
+- **Acceptance:** Persist edits automatically and clearly show saving, saved, and failure states.
 
 ## H. Instructions for Future AI Sessions
 

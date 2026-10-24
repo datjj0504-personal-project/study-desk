@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Sidebar } from "./components/Sidebar";
 import { ComingSoonPage } from "./pages/ComingSoonPage";
 import { DashboardPage } from "./pages/DashboardPage";
+import { NotesPage } from "./pages/NotesPage";
 import { NAV_ITEMS, type PageId } from "./types/navigation";
 
 function App() {
@@ -14,6 +15,8 @@ function App() {
       <main className="flex-1 overflow-y-auto p-8">
         {page === "dashboard" ? (
           <DashboardPage />
+        ) : page === "notes" ? (
+          <NotesPage />
         ) : (
           <ComingSoonPage title={current?.label ?? "Page"} />
         )}

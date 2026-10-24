@@ -14,7 +14,7 @@ export function DashboardPage() {
       <div className="mt-6 grid grid-cols-1 gap-4 xl:grid-cols-3">
         <PlaceholderCard
           title="Recent Notes"
-          message="Notes are not available yet."
+          message="Open Notes from the sidebar to create and edit your study notes."
         />
         <PlaceholderCard
           title="Focus Timer"
