@@ -1,6 +1,6 @@
 # StudyDesk Project Status
 
-Single source of truth for progress. Last updated: 2026-10-24 (P3-005 marked done).
+Single source of truth for progress. Last updated: 2026-10-24 (P3-006 marked done).
 
 ## A. Project Overview
 
@@ -18,7 +18,7 @@ Single source of truth for progress. Last updated: 2026-10-24 (P3-005 marked don
 | Frontend | IN_PROGRESS | Dashboard and Notes page are implemented; timer, stopwatch, statistics, and settings remain placeholders. |
 | Wails integration | DONE | Wails CLI v2.17.0, `wails doctor` passes, `wails build` succeeds, bindings generated, `GetAppInfo` round trip accepted by the user. |
 | Database | DONE | Pure-Go SQLite driver, app-data initialization, and versioned schema migrations are implemented. |
-| Notes feature | IN_PROGRESS | Note search and subject organization are implemented alongside CRUD and autosave; final notes validation remains. |
+| Notes feature | DONE | Note CRUD, autosave, title/body search, subject organization, and feature tests are implemented. |
 | Timer and stopwatch | NOT_STARTED | Placeholder UI only. |
 | Testing | IN_PROGRESS | Go storage/domain and frontend service/page tests are in place; expand coverage as features land. |
 | Build and packaging | IN_PROGRESS | `wails build` produced `build/bin/studydesk.exe`, which launches. No installer. |
@@ -103,13 +103,19 @@ Single source of truth for progress. Last updated: 2026-10-24 (P3-005 marked don
 - **Validation:** `go test ./...`, `go vet ./...`, `go build ./...`, `frontend: npm run test` (4 files, 16 tests), `frontend: npm run build`, `wails build`, and `git diff --check` passed.
 - **Files:** `app.go`, `app_test.go`, `internal/notes/{note.go,repository.go,note_test.go,README.md}`, `internal/storage/{note_repository.go,note_repository_test.go,README.md}`, `frontend/src/{pages/{NotesPage.tsx,NotesPage.test.tsx,README.md},services/{notes.ts,notes.test.ts,README.md}}`.
 
+### P3-006: Notes tests and validation
+- **Completed:** 2026-10-24
+- **Summary:** Completed feature-level validation across the Go domain/storage/app layers and frontend service/page. Added regression coverage for subject creation and deletion failures being surfaced in the UI.
+- **Validation:** `go test ./... -count=1`, `go vet ./...`, `go build ./...`, `frontend: npm run test` (4 files, 17 tests), `frontend: npm run build`, and `git diff --check` passed.
+- **Files:** `frontend/src/pages/NotesPage.test.tsx`, `ai/PROJECT_STATUS.md`.
+
 ## D. Current Task
 
 No task is currently in progress.
 
 ## E. Remaining Tasks and Roadmap
 
-Statuses: NOT_STARTED unless noted. P1-001 through P1-005, P2-001 through P2-003, and P3-001 through P3-005 are complete.
+Statuses: NOT_STARTED unless noted. P1-001 through P1-005, P2-001 through P2-003, and P3-001 through P3-006 are complete.
 
 **Phase 1 — Foundation**
 - P1-004: DONE (see C).
@@ -126,7 +132,7 @@ Statuses: NOT_STARTED unless noted. P1-001 through P1-005, P2-001 through P2-003
 - P3-003: DONE (see C).
 - P3-004: DONE (see C).
 - P3-005: DONE (see C).
-- P3-006: Notes tests and validation. Depends on: P3-002.
+- P3-006: DONE (see C).
 
 **Phase 4 — Timer and Stopwatch**
 - P4-001: Timer state and timing rules. Depends on: P1-002.
@@ -164,11 +170,11 @@ Statuses: NOT_STARTED unless noted. P1-001 through P1-005, P2-001 through P2-003
 
 ## G. Next Recommended Task
 
-**P3-006: Notes tests and validation.**
+**P4-001: Timer state and timing rules.**
 
-- **Why next:** The notes feature now includes persistence, search, subjects, and autosave; run a focused feature-level validation before moving to the next phase.
-- **Prerequisites:** P3-002 done.
-- **Acceptance:** Validate the notes workflows and address any regressions before marking the feature complete.
+- **Why next:** The Notes feature is complete and validated; the next phase begins with platform-independent timer state and timing rules.
+- **Prerequisites:** P1-002 done.
+- **Acceptance:** Define testable Pomodoro and stopwatch state transitions and timing rules without Wails dependencies.
 
 ## H. Instructions for Future AI Sessions
 

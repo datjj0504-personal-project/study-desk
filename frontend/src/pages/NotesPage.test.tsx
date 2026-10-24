@@ -220,4 +220,25 @@ describe("NotesPage", () => {
     );
     expect(await screen.findAllByRole("option", { name: "Biology" })).toHaveLength(2);
   });
+
+  it("surfaces subject creation and note deletion failures", async () => {
+    mockSubjects();
+    api.listNotes.mockResolvedValue([
+      { id: 10, title: "Protected note", body: "Keep this", createdAt: "", updatedAt: "" },
+    ]);
+    api.createSubject.mockRejectedValue(new Error("subject storage failed"));
+    api.deleteNote.mockRejectedValue(new Error("delete denied"));
+
+    render(<NotesPage />);
+    fireEvent.change(await screen.findByLabelText("Add a subject"), {
+      target: { value: "Chemistry" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Add" }));
+    expect((await screen.findByRole("alert")).textContent).toContain("subject storage failed");
+
+    fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+    fireEvent.click(screen.getByRole("button", { name: "Confirm" }));
+    await waitFor(() => expect(api.deleteNote).toHaveBeenCalledWith(10));
+    expect((await screen.findByRole("alert")).textContent).toContain("delete denied");
+  });
 });
