@@ -1,6 +1,6 @@
 # StudyDesk Project Status
 
-Single source of truth for progress. Last updated: 2026-10-24 (P3-006 marked done).
+Single source of truth for progress. Last updated: 2026-10-24 (P4-001 marked done).
 
 ## A. Project Overview
 
@@ -19,7 +19,7 @@ Single source of truth for progress. Last updated: 2026-10-24 (P3-006 marked don
 | Wails integration | DONE | Wails CLI v2.17.0, `wails doctor` passes, `wails build` succeeds, bindings generated, `GetAppInfo` round trip accepted by the user. |
 | Database | DONE | Pure-Go SQLite driver, app-data initialization, and versioned schema migrations are implemented. |
 | Notes feature | DONE | Note CRUD, autosave, title/body search, subject organization, and feature tests are implemented. |
-| Timer and stopwatch | NOT_STARTED | Placeholder UI only. |
+| Timer and stopwatch | IN_PROGRESS | Testable timer state engine and timing rules are implemented; Wails controls and UI remain. |
 | Testing | IN_PROGRESS | Go storage/domain and frontend service/page tests are in place; expand coverage as features land. |
 | Build and packaging | IN_PROGRESS | `wails build` produced `build/bin/studydesk.exe`, which launches. No installer. |
 
@@ -109,13 +109,19 @@ Single source of truth for progress. Last updated: 2026-10-24 (P3-006 marked don
 - **Validation:** `go test ./... -count=1`, `go vet ./...`, `go build ./...`, `frontend: npm run test` (4 files, 17 tests), `frontend: npm run build`, and `git diff --check` passed.
 - **Files:** `frontend/src/pages/NotesPage.test.tsx`, `ai/PROJECT_STATUS.md`.
 
+### P4-001: Timer state and timing rules
+- **Completed:** 2026-10-24
+- **Summary:** Added Wails-independent Pomodoro and stopwatch state logic with an injected clock, validated configurable durations, default 25/5/15-minute phases, pause/resume/reset transitions, completion snapshots, and explicit phase advancement with a long break every fourth completed focus phase.
+- **Validation:** `go test ./... -count=1`, `go vet ./...`, `go build ./...`, and `git diff --check` passed.
+- **Files:** `internal/timer/{timer.go,timer_test.go,README.md}`.
+
 ## D. Current Task
 
 No task is currently in progress.
 
 ## E. Remaining Tasks and Roadmap
 
-Statuses: NOT_STARTED unless noted. P1-001 through P1-005, P2-001 through P2-003, and P3-001 through P3-006 are complete.
+Statuses: NOT_STARTED unless noted. P1-001 through P1-005, P2-001 through P2-003, P3-001 through P3-006, and P4-001 are complete.
 
 **Phase 1 — Foundation**
 - P1-004: DONE (see C).
@@ -135,7 +141,7 @@ Statuses: NOT_STARTED unless noted. P1-001 through P1-005, P2-001 through P2-003
 - P3-006: DONE (see C).
 
 **Phase 4 — Timer and Stopwatch**
-- P4-001: Timer state and timing rules. Depends on: P1-002.
+- P4-001: DONE (see C).
 - P4-002: Pomodoro countdown, pause, resume, reset, completion. Depends on: P4-001.
 - P4-003: Stopwatch. Depends on: P4-001.
 - P4-004: Timer and stopwatch UI. Depends on: P4-002, P4-003, P1-004.
@@ -170,11 +176,11 @@ Statuses: NOT_STARTED unless noted. P1-001 through P1-005, P2-001 through P2-003
 
 ## G. Next Recommended Task
 
-**P4-001: Timer state and timing rules.**
+**P4-002: Pomodoro countdown, pause, resume, reset, completion.**
 
-- **Why next:** The Notes feature is complete and validated; the next phase begins with platform-independent timer state and timing rules.
-- **Prerequisites:** P1-002 done.
-- **Acceptance:** Define testable Pomodoro and stopwatch state transitions and timing rules without Wails dependencies.
+- **Why next:** The timer domain now defines deterministic state transitions and timing; the next task can expose and drive the Pomodoro timer through the app.
+- **Prerequisites:** P4-001 done.
+- **Acceptance:** Start, pause, resume and reset countdowns, expose completion to the UI, and validate timer durations.
 
 ## H. Instructions for Future AI Sessions
 
