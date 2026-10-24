@@ -150,7 +150,7 @@ Statuses: NOT_STARTED unless noted. P1-001 through P1-005, P2-001 through P2-003
 - P4-001: DONE (see C).
 - P4-002: DONE (see C).
 - P4-003: DONE — Stopwatch controls and state exposed through Wails. (see C)
-- P4-004: Timer and stopwatch UI. Depends on: P4-002, P4-003, P1-004.
+- P4-004: DONE — Pomodoro and stopwatch UI with Wails controls and live snapshots. (see C)
 - P4-005: Notifications and configurable durations. Depends on: P4-002.
 - P4-006: App restart, sleep, timing accuracy. Depends on: P4-002, P2-002.
 - P4-007: Timer tests and validation. Depends on: P4-002.

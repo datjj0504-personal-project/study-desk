@@ -3,6 +3,7 @@ import { Sidebar } from "./components/Sidebar";
 import { ComingSoonPage } from "./pages/ComingSoonPage";
 import { DashboardPage } from "./pages/DashboardPage";
 import { NotesPage } from "./pages/NotesPage";
+import { TimerPage } from "./pages/TimerPage";
 import { NAV_ITEMS, type PageId } from "./types/navigation";
 
 function App() {
@@ -17,6 +18,10 @@ function App() {
           <DashboardPage />
         ) : page === "notes" ? (
           <NotesPage />
+        ) : page === "timer" ? (
+          <TimerPage mode="pomodoro" />
+        ) : page === "stopwatch" ? (
+          <TimerPage mode="stopwatch" />
         ) : (
           <ComingSoonPage title={current?.label ?? "Page"} />
         )}

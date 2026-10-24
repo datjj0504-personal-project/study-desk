@@ -18,7 +18,7 @@ export function DashboardPage() {
         />
         <PlaceholderCard
           title="Focus Timer"
-          message="The focus timer is not available yet."
+          message="Open Focus Timer from the sidebar to start a focused session."
         />
         <PlaceholderCard
           title="Study Statistics"
