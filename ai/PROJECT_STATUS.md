@@ -1,6 +1,6 @@
 # StudyDesk Project Status
 
-Single source of truth for progress. Last updated: 2026-10-24 (P6-003 marked done).
+Single source of truth for progress. Last updated: 2026-10-24 (P6-004 marked done).
 
 ## A. Project Overview
 
@@ -24,7 +24,7 @@ Single source of truth for progress. Last updated: 2026-10-24 (P6-003 marked don
 | User preferences | DONE | Timer settings and system/light/dark theme preferences persist locally; the selected theme is applied across the UI. |
 | Error recovery UX | DONE | Notes loading and preference initialization failures remain distinct from empty/success states and offer retry actions. |
 | Testing | DONE | Go unit/integration suites, race checks, vet/build, frontend suite, and production type/build checks pass; App preference/navigation regression coverage is included. |
-| Build and packaging | IN_PROGRESS | `wails build` produced `build/bin/studydesk.exe`, which launches. No installer. |
+| Build and packaging | DONE | Windows/amd64 production build succeeds and creates `build/bin/studydesk.exe` (about 16.2 MB). No installer. |
 
 ## C. Completed Tasks
 
@@ -184,13 +184,19 @@ Single source of truth for progress. Last updated: 2026-10-24 (P6-003 marked don
 - **Validation:** `go test ./... -count=1`, `go test -race ./...`, `go vet ./...`, `go build ./...`, `frontend: npm run test` (14 files, 47 tests), `frontend: npm run build`, and `git diff --check` passed.
 - **Files:** `frontend/src/App.test.tsx`, `ai/PROJECT_STATUS.md`.
 
+### P6-004: Windows production builds
+- **Completed:** 2026-10-24
+- **Summary:** Ran the Wails production build for `windows/amd64`. Wails generated bindings, installed frontend dependencies, compiled the frontend and application assets, and produced the packaged executable at `build/bin/studydesk.exe` (16,244,224 bytes). The output directory and packaging settings preserve existing files; no installer is configured.
+- **Validation:** `wails build` succeeded; verified the executable exists and is non-empty; `git diff --check` passed. The executable was not launched as part of this build check.
+- **Files:** `build/bin/studydesk.exe` (generated, git-ignored), `ai/PROJECT_STATUS.md`.
+
 ## D. Current Task
 
 No task is currently in progress.
 
 ## E. Remaining Tasks and Roadmap
 
-Statuses: NOT_STARTED unless noted. P1-001 through P1-005, P2-001 through P2-003, P3-001 through P3-006, P4-001 through P4-007, P5-001 through P5-004, and P6-001 through P6-003 are complete.
+Statuses: NOT_STARTED unless noted. P1-001 through P1-005, P2-001 through P2-003, P3-001 through P3-006, P4-001 through P4-007, P5-001 through P5-004, and P6-001 through P6-004 are complete.
 
 **Phase 1 — Foundation**
 - P1-004: DONE (see C).
@@ -228,7 +234,7 @@ Statuses: NOT_STARTED unless noted. P1-001 through P1-005, P2-001 through P2-003
 - P6-001: DONE — Settings and theme preferences (see C).
 - P6-002: DONE — Error handling and UX improvements (see C).
 - P6-003: DONE — Integration and regression testing (see C).
-- P6-004: Windows production builds (`wails build`). Depends on: P1-005.
+- P6-004: DONE — Windows production builds (see C).
 - P6-005: Install, backup, and release documentation.
 
 ## F. Known Issues and Technical Decisions
@@ -245,11 +251,11 @@ Statuses: NOT_STARTED unless noted. P1-001 through P1-005, P2-001 through P2-003
 
 ## G. Next Recommended Task
 
-**P6-004: Windows production builds.**
+**P6-005: Install, backup, and release documentation.**
 
-- **Why next:** Verify the shipping desktop artifact after feature and regression-test work is complete.
-- **Prerequisites:** P1-005 is complete.
-- **Acceptance:** Run `wails build` on Windows, confirm the production executable is generated, and record build validation and any packaging limitations.
+- **Why next:** Document how to install and operate the generated Windows build and how local user data can be backed up and restored.
+- **Prerequisites:** P6-004 is complete.
+- **Acceptance:** Provide accurate build/install instructions, identify the local data location, and document safe backup and restore steps and current installer limitations.
 
 ## H. Instructions for Future AI Sessions
 
