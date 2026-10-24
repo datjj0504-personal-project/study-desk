@@ -31,14 +31,22 @@ type PomodoroState struct {
 	CompletedFocuses int          `json:"completedFocuses"`
 }
 
+// StopwatchState is the UI-facing stopwatch snapshot. Elapsed time is in milliseconds.
+type StopwatchState struct {
+	Status        timer.Status `json:"status"`
+	ElapsedMillis int64        `json:"elapsedMillis"`
+}
+
 // App is the Wails-bound adapter. Methods are added here as features land.
 type App struct {
-	ctx        context.Context
-	db         *sql.DB
-	noteRepo   notes.Repository
-	pomodoro   *timer.Timer
-	timerErr   error
-	startupErr error
+	ctx          context.Context
+	db           *sql.DB
+	noteRepo     notes.Repository
+	pomodoro     *timer.Timer
+	timerErr     error
+	stopwatch    *timer.Timer
+	stopwatchErr error
+	startupErr   error
 }
 
 func NewApp() *App {
@@ -50,6 +58,10 @@ func (a *App) startup(ctx context.Context) {
 	a.pomodoro, a.timerErr = timer.NewPomodoro(wallClock{}, timer.DefaultDurations())
 	if a.timerErr != nil {
 		log.Printf("initialize Pomodoro timer: %v", a.timerErr)
+	}
+	a.stopwatch, a.stopwatchErr = timer.NewStopwatch(wallClock{})
+	if a.stopwatchErr != nil {
+		log.Printf("initialize stopwatch: %v", a.stopwatchErr)
 	}
 	a.db, a.startupErr = storage.OpenAppDatabase(ctx)
 	if a.startupErr != nil {
@@ -240,6 +252,65 @@ func (a *App) AdvancePomodoro() error {
 	return nil
 }
 
+// GetStopwatchState returns the current stopwatch status and elapsed time.
+func (a *App) GetStopwatchState() (StopwatchState, error) {
+	stopwatch, err := a.stopwatchTimer()
+	if err != nil {
+		return StopwatchState{}, err
+	}
+	state := stopwatch.State()
+	return StopwatchState{
+		Status:        state.Status,
+		ElapsedMillis: state.Elapsed.Milliseconds(),
+	}, nil
+}
+
+// StartStopwatch starts an idle stopwatch.
+func (a *App) StartStopwatch() error {
+	stopwatch, err := a.stopwatchTimer()
+	if err != nil {
+		return err
+	}
+	if err := stopwatch.Start(); err != nil {
+		return fmt.Errorf("start stopwatch: %w", err)
+	}
+	return nil
+}
+
+// PauseStopwatch pauses a running stopwatch.
+func (a *App) PauseStopwatch() error {
+	stopwatch, err := a.stopwatchTimer()
+	if err != nil {
+		return err
+	}
+	if err := stopwatch.Pause(); err != nil {
+		return fmt.Errorf("pause stopwatch: %w", err)
+	}
+	return nil
+}
+
+// ResumeStopwatch resumes a paused stopwatch.
+func (a *App) ResumeStopwatch() error {
+	stopwatch, err := a.stopwatchTimer()
+	if err != nil {
+		return err
+	}
+	if err := stopwatch.Resume(); err != nil {
+		return fmt.Errorf("resume stopwatch: %w", err)
+	}
+	return nil
+}
+
+// ResetStopwatch resets the stopwatch to idle with no elapsed time.
+func (a *App) ResetStopwatch() error {
+	stopwatch, err := a.stopwatchTimer()
+	if err != nil {
+		return err
+	}
+	stopwatch.Reset()
+	return nil
+}
+
 func (a *App) noteRepository() (notes.Repository, error) {
 	if a.startupErr != nil {
 		return nil, fmt.Errorf("initialize local database: %w", a.startupErr)
@@ -258,6 +329,16 @@ func (a *App) pomodoroTimer() (*timer.Timer, error) {
 		return nil, errors.New("Pomodoro timer is unavailable before application startup")
 	}
 	return a.pomodoro, nil
+}
+
+func (a *App) stopwatchTimer() (*timer.Timer, error) {
+	if a.stopwatchErr != nil {
+		return nil, fmt.Errorf("initialize stopwatch: %w", a.stopwatchErr)
+	}
+	if a.stopwatch == nil || a.ctx == nil {
+		return nil, errors.New("stopwatch is unavailable before application startup")
+	}
+	return a.stopwatch, nil
 }
 
 type wallClock struct{}

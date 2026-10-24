@@ -193,3 +193,87 @@ func TestAppPomodoroRejectsInvalidTransitions(t *testing.T) {
 		t.Errorf("AdvancePomodoro() while idle error = %v, want %v", err, timer.ErrInvalidTransition)
 	}
 }
+
+func TestAppStopwatchControls(t *testing.T) {
+	ctx := context.Background()
+	clock := &appTestClock{now: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)}
+	stopwatch, err := timer.NewStopwatch(clock)
+	if err != nil {
+		t.Fatalf("NewStopwatch() returned an error: %v", err)
+	}
+	app := &App{ctx: ctx, stopwatch: stopwatch}
+
+	state, err := app.GetStopwatchState()
+	if err != nil {
+		t.Fatalf("GetStopwatchState() returned an error: %v", err)
+	}
+	if state.Status != timer.StatusIdle || state.ElapsedMillis != 0 {
+		t.Errorf("initial state = %+v, want idle with no elapsed time", state)
+	}
+	if err := app.StartStopwatch(); err != nil {
+		t.Fatalf("StartStopwatch() returned an error: %v", err)
+	}
+	clock.now = clock.now.Add(4*time.Second + 500*time.Millisecond)
+	state, err = app.GetStopwatchState()
+	if err != nil {
+		t.Fatalf("GetStopwatchState() while running returned an error: %v", err)
+	}
+	if state.Status != timer.StatusRunning || state.ElapsedMillis != 4_500 {
+		t.Errorf("running state = %+v, want running with 4500ms elapsed", state)
+	}
+
+	if err := app.PauseStopwatch(); err != nil {
+		t.Fatalf("PauseStopwatch() returned an error: %v", err)
+	}
+	clock.now = clock.now.Add(3 * time.Second)
+	state, err = app.GetStopwatchState()
+	if err != nil {
+		t.Fatalf("GetStopwatchState() while paused returned an error: %v", err)
+	}
+	if state.Status != timer.StatusPaused || state.ElapsedMillis != 4_500 {
+		t.Errorf("paused state = %+v, want paused with 4500ms elapsed", state)
+	}
+
+	if err := app.ResumeStopwatch(); err != nil {
+		t.Fatalf("ResumeStopwatch() returned an error: %v", err)
+	}
+	clock.now = clock.now.Add(2 * time.Second)
+	state, err = app.GetStopwatchState()
+	if err != nil {
+		t.Fatalf("GetStopwatchState() after resume returned an error: %v", err)
+	}
+	if state.Status != timer.StatusRunning || state.ElapsedMillis != 6_500 {
+		t.Errorf("resumed state = %+v, want running with 6500ms elapsed", state)
+	}
+
+	if err := app.ResetStopwatch(); err != nil {
+		t.Fatalf("ResetStopwatch() returned an error: %v", err)
+	}
+	state, err = app.GetStopwatchState()
+	if err != nil {
+		t.Fatalf("GetStopwatchState() after reset returned an error: %v", err)
+	}
+	if state.Status != timer.StatusIdle || state.ElapsedMillis != 0 {
+		t.Errorf("reset state = %+v, want idle with no elapsed time", state)
+	}
+}
+
+func TestAppStopwatchRejectsInvalidTransitions(t *testing.T) {
+	app := NewApp()
+	if _, err := app.GetStopwatchState(); err == nil {
+		t.Fatal("GetStopwatchState() succeeded before startup")
+	}
+
+	stopwatch, err := timer.NewStopwatch(&appTestClock{now: time.Now()})
+	if err != nil {
+		t.Fatalf("NewStopwatch() returned an error: %v", err)
+	}
+	app.ctx = context.Background()
+	app.stopwatch = stopwatch
+	if err := app.PauseStopwatch(); !errors.Is(err, timer.ErrInvalidTransition) {
+		t.Errorf("PauseStopwatch() while idle error = %v, want %v", err, timer.ErrInvalidTransition)
+	}
+	if err := app.ResumeStopwatch(); !errors.Is(err, timer.ErrInvalidTransition) {
+		t.Errorf("ResumeStopwatch() while idle error = %v, want %v", err, timer.ErrInvalidTransition)
+	}
+}

@@ -10,6 +10,8 @@ Default Pomodoro durations are 25 minutes of focus, 5 minutes of short break,
 and 15 minutes of long break. A long break follows every fourth completed focus
 phase.
 
-The app adapter exposes Pomodoro snapshots and controls through Wails. The UI
-can poll state to update the countdown; a snapshot reports completion after the
-phase deadline has passed.
+The app adapter exposes Pomodoro and stopwatch snapshots and controls through
+Wails. The UI can poll Pomodoro state to update the countdown; a snapshot
+reports completion after the phase deadline has passed. Stopwatch snapshots
+report elapsed milliseconds while running and preserve elapsed time while
+paused.
