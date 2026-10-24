@@ -1,6 +1,6 @@
 # StudyDesk Project Status
 
-Single source of truth for progress. Last updated: 2026-10-24 (P3-001 marked done).
+Single source of truth for progress. Last updated: 2026-10-24 (P3-002 marked done).
 
 ## A. Project Overview
 
@@ -14,11 +14,11 @@ Single source of truth for progress. Last updated: 2026-10-24 (P3-001 marked don
 | Area | Status | Notes |
 | --- | --- | --- |
 | Project initialization | DONE | Structure, docs, and Wails app skeleton exist. |
-| Backend (Go) | IN_PROGRESS | `App` adapter, SQLite initialization, and the initial notes domain contract exist; note persistence is not implemented yet. |
+| Backend (Go) | IN_PROGRESS | `App` adapter, SQLite initialization, and notes persistence operations are implemented; other domains remain. |
 | Frontend | IN_PROGRESS | UI shell with sidebar and placeholder pages; dashboard shows backend connection status. No feature logic. |
 | Wails integration | DONE | Wails CLI v2.17.0, `wails doctor` passes, `wails build` succeeds, bindings generated, `GetAppInfo` round trip accepted by the user. |
 | Database | DONE | Pure-Go SQLite driver, app-data initialization, and versioned schema migrations are implemented. |
-| Notes feature | IN_PROGRESS | Note model and repository contract are defined; persistence and UI remain. |
+| Notes feature | IN_PROGRESS | Note model, CRUD persistence, and backend bindings exist; UI and search remain. |
 | Timer and stopwatch | NOT_STARTED | Placeholder UI only. |
 | Testing | IN_PROGRESS | Initial Go and frontend tests are in place; expand coverage as features land. |
 | Build and packaging | IN_PROGRESS | `wails build` produced `build/bin/studydesk.exe`, which launches. No installer. |
@@ -79,13 +79,19 @@ Single source of truth for progress. Last updated: 2026-10-24 (P3-001 marked don
 - **Validation:** `go test ./...`, `go vet ./...`, `go build ./...`, and `git diff --check` passed.
 - **Files:** `internal/notes/{note.go,repository.go,note_test.go,README.md}`.
 
+### P3-002: Notes CRUD
+- **Completed:** 2026-10-24
+- **Summary:** Implemented the SQLite note repository for create, get, update, delete, and recently-updated list operations, including timestamp handling and not-found/validation errors. Exposed corresponding operations through the Wails-bound `App` and added repository and app-adapter CRUD tests.
+- **Validation:** `go test ./...`, `go vet ./...`, `go build ./...`, `wails build` (including bound note model/binding generation), and `git diff --check` passed.
+- **Files:** `app.go`, `app_test.go`, `internal/notes/{note.go,README.md}`, `internal/storage/{note_repository.go,note_repository_test.go,README.md}`.
+
 ## D. Current Task
 
 No task is currently in progress.
 
 ## E. Remaining Tasks and Roadmap
 
-Statuses: NOT_STARTED unless noted. P1-001 through P1-005, P2-001 through P2-003, and P3-001 are complete.
+Statuses: NOT_STARTED unless noted. P1-001 through P1-005, P2-001 through P2-003, and P3-001 through P3-002 are complete.
 
 **Phase 1 — Foundation**
 - P1-004: DONE (see C).
@@ -98,7 +104,7 @@ Statuses: NOT_STARTED unless noted. P1-001 through P1-005, P2-001 through P2-003
 
 **Phase 3 — Notes**
 - P3-001: DONE (see C).
-- P3-002: Notes CRUD. Depends on: P3-001.
+- P3-002: DONE (see C).
 - P3-003: Notes list and editor UI. Depends on: P3-002, P1-004.
 - P3-004: Autosave and save-state indicators. Depends on: P3-003.
 - P3-005: Search, tags, organization. Depends on: P3-002.
@@ -140,11 +146,11 @@ Statuses: NOT_STARTED unless noted. P1-001 through P1-005, P2-001 through P2-003
 
 ## G. Next Recommended Task
 
-**P3-002: Notes CRUD.**
+**P3-003: Notes list and editor UI.**
 
-- **Why next:** The note model and repository contract are defined, so SQLite storage and app-facing operations can now be implemented against them.
-- **Prerequisites:** P3-001 done.
-- **Acceptance:** Implement note create, read, update, delete, and list operations with tests.
+- **Why next:** Backend note CRUD is available through Wails bindings and can now support the Notes page.
+- **Prerequisites:** P3-002 and P1-004 done.
+- **Acceptance:** Provide a notes list and editor UI that uses the backend operations.
 
 ## H. Instructions for Future AI Sessions
 

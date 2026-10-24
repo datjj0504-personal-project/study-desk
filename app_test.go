@@ -1,6 +1,13 @@
 package main
 
-import "testing"
+import (
+	"context"
+	"errors"
+	"testing"
+
+	"studydesk/internal/notes"
+	"studydesk/internal/storage"
+)
 
 func TestGetAppInfo(t *testing.T) {
 	app := NewApp()
@@ -13,5 +20,61 @@ func TestGetAppInfo(t *testing.T) {
 	want := AppInfo{Name: "StudyDesk", Version: "0.1.0"}
 	if got != want {
 		t.Errorf("GetAppInfo() = %+v, want %+v", got, want)
+	}
+}
+
+func TestAppNoteCRUD(t *testing.T) {
+	ctx := context.Background()
+	db, err := storage.OpenDatabase(ctx, ":memory:")
+	if err != nil {
+		t.Fatalf("OpenDatabase() returned an error: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := db.Close(); err != nil {
+			t.Errorf("close SQLite database: %v", err)
+		}
+	})
+	app := &App{
+		ctx:      ctx,
+		db:       db,
+		noteRepo: storage.NewNoteRepository(db),
+	}
+
+	created, err := app.CreateNote(notes.Note{Title: "App note", Body: "Content"})
+	if err != nil {
+		t.Fatalf("CreateNote() returned an error: %v", err)
+	}
+	got, err := app.GetNote(created.ID)
+	if err != nil {
+		t.Fatalf("GetNote() returned an error: %v", err)
+	}
+	if got.Title != "App note" || got.Body != "Content" {
+		t.Errorf("GetNote() = %+v, want created note", got)
+	}
+
+	got.Body = "Edited content"
+	if err := app.UpdateNote(got); err != nil {
+		t.Fatalf("UpdateNote() returned an error: %v", err)
+	}
+	listed, err := app.ListNotes()
+	if err != nil {
+		t.Fatalf("ListNotes() returned an error: %v", err)
+	}
+	if len(listed) != 1 || listed[0].Body != "Edited content" {
+		t.Errorf("ListNotes() = %+v, want one updated note", listed)
+	}
+
+	if err := app.DeleteNote(created.ID); err != nil {
+		t.Fatalf("DeleteNote() returned an error: %v", err)
+	}
+	if _, err := app.GetNote(created.ID); !errors.Is(err, notes.ErrNotFound) {
+		t.Errorf("GetNote() after deletion error = %v, want %v", err, notes.ErrNotFound)
+	}
+}
+
+func TestAppNoteMethodsRequireStartup(t *testing.T) {
+	app := NewApp()
+	if _, err := app.ListNotes(); err == nil {
+		t.Fatal("ListNotes() succeeded before startup")
 	}
 }

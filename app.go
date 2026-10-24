@@ -3,9 +3,11 @@ package main
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"log"
 
+	"studydesk/internal/notes"
 	"studydesk/internal/storage"
 )
 
@@ -21,6 +23,7 @@ type AppInfo struct {
 type App struct {
 	ctx        context.Context
 	db         *sql.DB
+	noteRepo   notes.Repository
 	startupErr error
 }
 
@@ -33,7 +36,9 @@ func (a *App) startup(ctx context.Context) {
 	a.db, a.startupErr = storage.OpenAppDatabase(ctx)
 	if a.startupErr != nil {
 		log.Printf("initialize local database: %v", a.startupErr)
+		return
 	}
+	a.noteRepo = storage.NewNoteRepository(a.db)
 }
 
 func (a *App) shutdown(context.Context) {
@@ -51,4 +56,77 @@ func (a *App) GetAppInfo() (AppInfo, error) {
 		return AppInfo{}, fmt.Errorf("initialize local database: %w", a.startupErr)
 	}
 	return AppInfo{Name: "StudyDesk", Version: appVersion}, nil
+}
+
+// CreateNote validates and saves a note.
+func (a *App) CreateNote(note notes.Note) (notes.Note, error) {
+	repo, err := a.noteRepository()
+	if err != nil {
+		return notes.Note{}, err
+	}
+	created, err := repo.Create(a.ctx, note)
+	if err != nil {
+		return notes.Note{}, fmt.Errorf("create note: %w", err)
+	}
+	return created, nil
+}
+
+// GetNote retrieves a note by its ID.
+func (a *App) GetNote(id int64) (notes.Note, error) {
+	repo, err := a.noteRepository()
+	if err != nil {
+		return notes.Note{}, err
+	}
+	note, err := repo.GetByID(a.ctx, id)
+	if err != nil {
+		return notes.Note{}, fmt.Errorf("get note: %w", err)
+	}
+	return note, nil
+}
+
+// UpdateNote updates a note's title, body, and optional subject.
+func (a *App) UpdateNote(note notes.Note) error {
+	repo, err := a.noteRepository()
+	if err != nil {
+		return err
+	}
+	if err := repo.Update(a.ctx, note); err != nil {
+		return fmt.Errorf("update note: %w", err)
+	}
+	return nil
+}
+
+// DeleteNote deletes a note by its ID.
+func (a *App) DeleteNote(id int64) error {
+	repo, err := a.noteRepository()
+	if err != nil {
+		return err
+	}
+	if err := repo.Delete(a.ctx, id); err != nil {
+		return fmt.Errorf("delete note: %w", err)
+	}
+	return nil
+}
+
+// ListNotes returns notes ordered by most recently updated first.
+func (a *App) ListNotes() ([]notes.Note, error) {
+	repo, err := a.noteRepository()
+	if err != nil {
+		return nil, err
+	}
+	result, err := repo.List(a.ctx)
+	if err != nil {
+		return nil, fmt.Errorf("list notes: %w", err)
+	}
+	return result, nil
+}
+
+func (a *App) noteRepository() (notes.Repository, error) {
+	if a.startupErr != nil {
+		return nil, fmt.Errorf("initialize local database: %w", a.startupErr)
+	}
+	if a.noteRepo == nil || a.ctx == nil {
+		return nil, errors.New("notes are unavailable before application startup")
+	}
+	return a.noteRepo, nil
 }
