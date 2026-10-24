@@ -583,3 +583,39 @@ func TestAppGetStudyStatisticsUsesLocalDateWindow(t *testing.T) {
 			got.TodaySeconds, got.WeekSeconds, got.AllTimeSeconds)
 	}
 }
+
+func TestAppListStudySessionsReturnsNewestFirstAndRequiresStartup(t *testing.T) {
+	app := NewApp()
+	if _, err := app.ListStudySessions(); err == nil {
+		t.Fatal("ListStudySessions() succeeded before startup")
+	}
+
+	ctx := context.Background()
+	repo := newAppSessionRepository(t)
+	firstStart := time.Date(2026, 10, 23, 8, 0, 0, 0, time.UTC)
+	secondStart := firstStart.Add(time.Hour)
+	first, err := repo.CreateSession(ctx, study.Session{
+		Kind: study.SessionKindPomodoro, StartedAt: firstStart,
+		EndedAt: firstStart.Add(25 * time.Minute), DurationSeconds: 1500,
+	})
+	if err != nil {
+		t.Fatalf("CreateSession() first returned an error: %v", err)
+	}
+	second, err := repo.CreateSession(ctx, study.Session{
+		Kind: study.SessionKindStopwatch, StartedAt: secondStart,
+		EndedAt: secondStart.Add(10 * time.Minute), DurationSeconds: 600,
+	})
+	if err != nil {
+		t.Fatalf("CreateSession() second returned an error: %v", err)
+	}
+	app.ctx = ctx
+	app.sessions = repo
+
+	got, err := app.ListStudySessions()
+	if err != nil {
+		t.Fatalf("ListStudySessions() returned an error: %v", err)
+	}
+	if len(got) != 2 || got[0].ID != second.ID || got[1].ID != first.ID {
+		t.Errorf("ListStudySessions() = %+v, want newest first: %d then %d", got, second.ID, first.ID)
+	}
+}

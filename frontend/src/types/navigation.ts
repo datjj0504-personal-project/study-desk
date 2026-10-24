@@ -3,6 +3,7 @@ export type PageId =
   | "notes"
   | "timer"
   | "stopwatch"
+  | "sessions"
   | "statistics"
   | "settings";
 
@@ -16,6 +17,7 @@ export const NAV_ITEMS: NavItem[] = [
   { id: "notes", label: "Notes" },
   { id: "timer", label: "Focus Timer" },
   { id: "stopwatch", label: "Stopwatch" },
+  { id: "sessions", label: "Session History" },
   { id: "statistics", label: "Study Statistics" },
   { id: "settings", label: "Settings" },
 ];

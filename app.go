@@ -209,6 +209,18 @@ func (a *App) ListSubjects() ([]notes.Subject, error) {
 	return result, nil
 }
 
+// ListStudySessions returns persisted sessions newest first.
+func (a *App) ListStudySessions() ([]study.Session, error) {
+	if a.sessions == nil || a.ctx == nil {
+		return nil, errors.New("study session persistence is unavailable before application startup")
+	}
+	result, err := a.sessions.ListSessions(a.ctx)
+	if err != nil {
+		return nil, fmt.Errorf("list study sessions: %w", err)
+	}
+	return result, nil
+}
+
 // GetStudyStatistics returns study durations for the local day, local week, all time, and each subject.
 func (a *App) GetStudyStatistics() (study.Statistics, error) {
 	if a.sessions == nil || a.ctx == nil {

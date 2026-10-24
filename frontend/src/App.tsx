@@ -4,6 +4,7 @@ import { PomodoroNotificationMonitor } from "./components/PomodoroNotificationMo
 import { ComingSoonPage } from "./pages/ComingSoonPage";
 import { DashboardPage } from "./pages/DashboardPage";
 import { NotesPage } from "./pages/NotesPage";
+import { SessionHistoryPage } from "./pages/SessionHistoryPage";
 import { StatisticsPage } from "./pages/StatisticsPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { TimerPage } from "./pages/TimerPage";
@@ -106,6 +107,8 @@ function App() {
           <TimerPage mode="stopwatch" />
         ) : page === "settings" ? (
           <SettingsPage settings={settings} onSettingsChange={onSettingsChange} />
+        ) : page === "sessions" ? (
+          <SessionHistoryPage />
         ) : page === "statistics" ? (
           <StatisticsPage />
         ) : (
