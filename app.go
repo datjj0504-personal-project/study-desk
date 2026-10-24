@@ -6,9 +6,11 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"sync"
 	"time"
 
 	"studydesk/internal/notes"
+	"studydesk/internal/settings"
 	"studydesk/internal/storage"
 	"studydesk/internal/timer"
 )
@@ -42,8 +44,11 @@ type App struct {
 	ctx          context.Context
 	db           *sql.DB
 	noteRepo     notes.Repository
+	settingsRepo settings.Repository
+	settingsErr  error
 	pomodoro     *timer.Timer
 	timerErr     error
+	pomodoroMu   sync.Mutex
 	stopwatch    *timer.Timer
 	stopwatchErr error
 	startupErr   error
@@ -69,6 +74,17 @@ func (a *App) startup(ctx context.Context) {
 		return
 	}
 	a.noteRepo = storage.NewNoteRepository(a.db)
+	a.settingsRepo = storage.NewSettingsRepository(a.db)
+	timerSettings, err := a.settingsRepo.LoadTimerSettings(ctx)
+	if err != nil {
+		a.settingsErr = err
+		log.Printf("load timer settings: %v", err)
+		return
+	}
+	if err := a.pomodoro.Configure(timerSettings.Durations()); err != nil {
+		a.timerErr = err
+		log.Printf("configure Pomodoro timer: %v", err)
+	}
 }
 
 func (a *App) shutdown(context.Context) {
@@ -179,6 +195,8 @@ func (a *App) ListSubjects() ([]notes.Subject, error) {
 
 // GetPomodoroState returns the current countdown and phase state.
 func (a *App) GetPomodoroState() (PomodoroState, error) {
+	a.pomodoroMu.Lock()
+	defer a.pomodoroMu.Unlock()
 	pomodoro, err := a.pomodoroTimer()
 	if err != nil {
 		return PomodoroState{}, err
@@ -196,6 +214,8 @@ func (a *App) GetPomodoroState() (PomodoroState, error) {
 
 // StartPomodoro starts an idle Pomodoro phase.
 func (a *App) StartPomodoro() error {
+	a.pomodoroMu.Lock()
+	defer a.pomodoroMu.Unlock()
 	pomodoro, err := a.pomodoroTimer()
 	if err != nil {
 		return err
@@ -208,6 +228,8 @@ func (a *App) StartPomodoro() error {
 
 // PausePomodoro pauses a running Pomodoro phase.
 func (a *App) PausePomodoro() error {
+	a.pomodoroMu.Lock()
+	defer a.pomodoroMu.Unlock()
 	pomodoro, err := a.pomodoroTimer()
 	if err != nil {
 		return err
@@ -220,6 +242,8 @@ func (a *App) PausePomodoro() error {
 
 // ResumePomodoro resumes a paused Pomodoro phase.
 func (a *App) ResumePomodoro() error {
+	a.pomodoroMu.Lock()
+	defer a.pomodoroMu.Unlock()
 	pomodoro, err := a.pomodoroTimer()
 	if err != nil {
 		return err
@@ -232,6 +256,8 @@ func (a *App) ResumePomodoro() error {
 
 // ResetPomodoro resets the complete Pomodoro cycle to its initial focus phase.
 func (a *App) ResetPomodoro() error {
+	a.pomodoroMu.Lock()
+	defer a.pomodoroMu.Unlock()
 	pomodoro, err := a.pomodoroTimer()
 	if err != nil {
 		return err
@@ -242,12 +268,64 @@ func (a *App) ResetPomodoro() error {
 
 // AdvancePomodoro moves a completed phase to the next phase.
 func (a *App) AdvancePomodoro() error {
+	a.pomodoroMu.Lock()
+	defer a.pomodoroMu.Unlock()
 	pomodoro, err := a.pomodoroTimer()
 	if err != nil {
 		return err
 	}
 	if err := pomodoro.Advance(); err != nil {
 		return fmt.Errorf("advance Pomodoro: %w", err)
+	}
+	return nil
+}
+
+// GetTimerSettings returns the persisted Pomodoro configuration.
+func (a *App) GetTimerSettings() (settings.TimerSettings, error) {
+	repo, err := a.timerSettingsRepository()
+	if err != nil {
+		return settings.TimerSettings{}, err
+	}
+	value, err := repo.LoadTimerSettings(a.ctx)
+	if err != nil {
+		return settings.TimerSettings{}, fmt.Errorf("load timer settings: %w", err)
+	}
+	return value, nil
+}
+
+// UpdateTimerSettings persists the Pomodoro configuration when the timer is idle.
+func (a *App) UpdateTimerSettings(value settings.TimerSettings) error {
+	if err := value.Validate(); err != nil {
+		return err
+	}
+	repo, err := a.timerSettingsRepository()
+	if err != nil {
+		return err
+	}
+	a.pomodoroMu.Lock()
+	defer a.pomodoroMu.Unlock()
+	pomodoro, err := a.pomodoroTimer()
+	if err != nil {
+		return err
+	}
+	current, err := repo.LoadTimerSettings(a.ctx)
+	if err != nil {
+		return fmt.Errorf("load timer settings before update: %w", err)
+	}
+	durationsChanged := value.FocusMinutes != current.FocusMinutes ||
+		value.ShortBreakMinutes != current.ShortBreakMinutes ||
+		value.LongBreakMinutes != current.LongBreakMinutes ||
+		value.LongBreakEvery != current.LongBreakEvery
+	if durationsChanged && pomodoro.State().Status != timer.StatusIdle {
+		return fmt.Errorf("update timer settings: %w: reset the timer before changing durations", timer.ErrInvalidTransition)
+	}
+	if err := repo.SaveTimerSettings(a.ctx, value); err != nil {
+		return fmt.Errorf("save timer settings: %w", err)
+	}
+	if durationsChanged {
+		if err := pomodoro.Configure(value.Durations()); err != nil {
+			return fmt.Errorf("configure timer settings: %w", err)
+		}
 	}
 	return nil
 }
@@ -329,6 +407,19 @@ func (a *App) pomodoroTimer() (*timer.Timer, error) {
 		return nil, errors.New("Pomodoro timer is unavailable before application startup")
 	}
 	return a.pomodoro, nil
+}
+
+func (a *App) timerSettingsRepository() (settings.Repository, error) {
+	if a.startupErr != nil {
+		return nil, fmt.Errorf("initialize local database: %w", a.startupErr)
+	}
+	if a.settingsErr != nil {
+		return nil, fmt.Errorf("load timer settings: %w", a.settingsErr)
+	}
+	if a.settingsRepo == nil || a.ctx == nil {
+		return nil, errors.New("timer settings are unavailable before application startup")
+	}
+	return a.settingsRepo, nil
 }
 
 func (a *App) stopwatchTimer() (*timer.Timer, error) {

@@ -1,6 +1,6 @@
 # StudyDesk Project Status
 
-Single source of truth for progress. Last updated: 2026-10-24 (P4-002 marked done).
+Single source of truth for progress. Last updated: 2026-10-24 (P4-005 marked done).
 
 ## A. Project Overview
 
@@ -15,11 +15,11 @@ Single source of truth for progress. Last updated: 2026-10-24 (P4-002 marked don
 | --- | --- | --- |
 | Project initialization | DONE | Structure, docs, and Wails app skeleton exist. |
 | Backend (Go) | IN_PROGRESS | `App` adapter, SQLite initialization, and notes persistence operations are implemented; other domains remain. |
-| Frontend | IN_PROGRESS | Dashboard and Notes page are implemented; timer, stopwatch, statistics, and settings remain placeholders. |
+| Frontend | IN_PROGRESS | Dashboard, Notes, Timer, Stopwatch, and Settings pages are implemented; statistics remains a placeholder. |
 | Wails integration | DONE | Wails CLI v2.17.0, `wails doctor` passes, `wails build` succeeds, bindings generated, `GetAppInfo` round trip accepted by the user. |
 | Database | DONE | Pure-Go SQLite driver, app-data initialization, and versioned schema migrations are implemented. |
 | Notes feature | DONE | Note CRUD, autosave, title/body search, subject organization, and feature tests are implemented. |
-| Timer and stopwatch | IN_PROGRESS | Pomodoro state engine and Wails controls/state polling are implemented; frontend timer and stopwatch remain. |
+| Timer and stopwatch | IN_PROGRESS | Pomodoro and stopwatch controls, configurable persisted durations, completion notifications, and frontend pages are implemented. |
 | Testing | IN_PROGRESS | Go storage/domain and frontend service/page tests are in place; expand coverage as features land. |
 | Build and packaging | IN_PROGRESS | `wails build` produced `build/bin/studydesk.exe`, which launches. No installer. |
 
@@ -121,13 +121,19 @@ Single source of truth for progress. Last updated: 2026-10-24 (P4-002 marked don
 - **Validation:** `go test ./... -count=1`, `go vet ./...`, `go build ./...`, `wails build` (including generated Pomodoro bindings), and `git diff --check` passed.
 - **Files:** `app.go`, `app_test.go`, `frontend/wailsjs/go/main/App.d.ts` (generated/ignored), `ai/PROJECT_STATUS.md`.
 
+### P4-005: Notifications and configurable durations
+- **Completed:** 2026-10-24
+- **Summary:** Persisted validated Pomodoro durations and notification preference in the existing settings table; exposed settings through Wails and added a Settings screen. Duration changes require an idle timer. An app-level monitor detects phase completion regardless of the selected page, shows an in-app alert, and uses OS notifications when enabled and permitted.
+- **Validation:** `go test ./...`, `go vet ./...`, `go build ./...`, `wails build`, `frontend: npm run test` (9 files, 29 tests), `frontend: npm run build`, and `git diff --check` passed.
+- **Files:** `app.go`, `app_test.go`, `internal/{settings,storage,timer}`, `frontend/src/{App.tsx,components/PomodoroNotificationMonitor.tsx,pages/SettingsPage.tsx,services/settings.ts}`, `ai/PROJECT_STATUS.md`.
+
 ## D. Current Task
 
 No task is currently in progress.
 
 ## E. Remaining Tasks and Roadmap
 
-Statuses: NOT_STARTED unless noted. P1-001 through P1-005, P2-001 through P2-003, P3-001 through P3-006, and P4-001 through P4-002 are complete.
+Statuses: NOT_STARTED unless noted. P1-001 through P1-005, P2-001 through P2-003, P3-001 through P3-006, and P4-001 through P4-005 are complete.
 
 **Phase 1 — Foundation**
 - P1-004: DONE (see C).
@@ -151,7 +157,7 @@ Statuses: NOT_STARTED unless noted. P1-001 through P1-005, P2-001 through P2-003
 - P4-002: DONE (see C).
 - P4-003: DONE — Stopwatch controls and state exposed through Wails. (see C)
 - P4-004: DONE — Pomodoro and stopwatch UI with Wails controls and live snapshots. (see C)
-- P4-005: Notifications and configurable durations. Depends on: P4-002.
+- P4-005: DONE — Notifications and configurable durations. (see C)
 - P4-006: App restart, sleep, timing accuracy. Depends on: P4-002, P2-002.
 - P4-007: Timer tests and validation. Depends on: P4-002.
 

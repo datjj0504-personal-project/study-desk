@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"studydesk/internal/notes"
+	"studydesk/internal/settings"
 	"studydesk/internal/storage"
 	"studydesk/internal/timer"
 )
@@ -191,6 +192,71 @@ func TestAppPomodoroRejectsInvalidTransitions(t *testing.T) {
 	}
 	if err := app.AdvancePomodoro(); !errors.Is(err, timer.ErrInvalidTransition) {
 		t.Errorf("AdvancePomodoro() while idle error = %v, want %v", err, timer.ErrInvalidTransition)
+	}
+}
+
+func TestAppTimerSettingsPersistAndRequireIdleForDurationChanges(t *testing.T) {
+	ctx := context.Background()
+	db, err := storage.OpenDatabase(ctx, ":memory:")
+	if err != nil {
+		t.Fatalf("OpenDatabase() returned an error: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := db.Close(); err != nil {
+			t.Errorf("close SQLite database: %v", err)
+		}
+	})
+	pomodoro, err := timer.NewPomodoro(&appTestClock{now: time.Now()}, timer.DefaultDurations())
+	if err != nil {
+		t.Fatalf("NewPomodoro() returned an error: %v", err)
+	}
+	app := &App{
+		ctx:          ctx,
+		settingsRepo: storage.NewSettingsRepository(db),
+		pomodoro:     pomodoro,
+	}
+
+	updated := settings.TimerSettings{
+		FocusMinutes: 40, ShortBreakMinutes: 7, LongBreakMinutes: 18,
+		LongBreakEvery: 3, NotificationsEnabled: true,
+	}
+	if err := app.UpdateTimerSettings(updated); err != nil {
+		t.Fatalf("UpdateTimerSettings() returned an error: %v", err)
+	}
+	got, err := app.GetTimerSettings()
+	if err != nil {
+		t.Fatalf("GetTimerSettings() returned an error: %v", err)
+	}
+	if got != updated {
+		t.Errorf("GetTimerSettings() = %+v, want %+v", got, updated)
+	}
+	state, err := app.GetPomodoroState()
+	if err != nil {
+		t.Fatalf("GetPomodoroState() after update returned an error: %v", err)
+	}
+	if state.DurationMillis != 40*60*1000 {
+		t.Errorf("updated focus duration = %dms, want 2400000ms", state.DurationMillis)
+	}
+
+	if err := app.StartPomodoro(); err != nil {
+		t.Fatalf("StartPomodoro() returned an error: %v", err)
+	}
+	notificationOnly := updated
+	notificationOnly.NotificationsEnabled = false
+	if err := app.UpdateTimerSettings(notificationOnly); err != nil {
+		t.Fatalf("UpdateTimerSettings() changing only notifications while running returned an error: %v", err)
+	}
+	changedDurations := notificationOnly
+	changedDurations.FocusMinutes = 45
+	if err := app.UpdateTimerSettings(changedDurations); !errors.Is(err, timer.ErrInvalidTransition) {
+		t.Errorf("UpdateTimerSettings() changing durations while running error = %v, want %v", err, timer.ErrInvalidTransition)
+	}
+	got, err = app.GetTimerSettings()
+	if err != nil {
+		t.Fatalf("GetTimerSettings() after rejected duration change returned an error: %v", err)
+	}
+	if got != notificationOnly {
+		t.Errorf("settings after rejected duration change = %+v, want %+v", got, notificationOnly)
 	}
 }
 

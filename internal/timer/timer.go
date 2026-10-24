@@ -3,6 +3,7 @@ package timer
 import (
 	"errors"
 	"fmt"
+	"sync"
 	"time"
 )
 
@@ -69,6 +70,7 @@ type State struct {
 
 // Timer owns one Pomodoro or stopwatch timeline.
 type Timer struct {
+	mu        sync.Mutex
 	clock     Clock
 	mode      Mode
 	durations Durations
@@ -110,6 +112,8 @@ func NewStopwatch(clock Clock) (*Timer, error) {
 }
 
 func (t *Timer) Start() error {
+	t.mu.Lock()
+	defer t.mu.Unlock()
 	t.refresh()
 	if t.status != StatusIdle {
 		return fmt.Errorf("start timer: %w: current status is %s", ErrInvalidTransition, t.status)
@@ -120,6 +124,8 @@ func (t *Timer) Start() error {
 }
 
 func (t *Timer) Pause() error {
+	t.mu.Lock()
+	defer t.mu.Unlock()
 	t.refresh()
 	if t.status != StatusRunning {
 		return fmt.Errorf("pause timer: %w: current status is %s", ErrInvalidTransition, t.status)
@@ -131,6 +137,8 @@ func (t *Timer) Pause() error {
 }
 
 func (t *Timer) Resume() error {
+	t.mu.Lock()
+	defer t.mu.Unlock()
 	t.refresh()
 	if t.status != StatusPaused {
 		return fmt.Errorf("resume timer: %w: current status is %s", ErrInvalidTransition, t.status)
@@ -141,6 +149,8 @@ func (t *Timer) Resume() error {
 }
 
 func (t *Timer) Reset() {
+	t.mu.Lock()
+	defer t.mu.Unlock()
 	t.phase = PhaseStopwatch
 	t.status = StatusIdle
 	t.duration = 0
@@ -155,6 +165,8 @@ func (t *Timer) Reset() {
 
 // Advance moves a completed Pomodoro to its next phase and leaves it idle.
 func (t *Timer) Advance() error {
+	t.mu.Lock()
+	defer t.mu.Unlock()
 	t.refresh()
 	if t.mode != ModePomodoro || t.status != StatusCompleted {
 		return fmt.Errorf("advance timer: %w: a completed Pomodoro phase is required", ErrInvalidTransition)
@@ -183,7 +195,31 @@ func (t *Timer) Advance() error {
 	return nil
 }
 
+// Configure updates Pomodoro durations when no phase is active.
+func (t *Timer) Configure(durations Durations) error {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if t.mode != ModePomodoro {
+		return fmt.Errorf("configure timer: %w: only Pomodoro timers have durations", ErrInvalidConfiguration)
+	}
+	if durations.Focus <= 0 || durations.ShortBreak <= 0 || durations.LongBreak <= 0 || durations.LongBreakEvery <= 0 {
+		return fmt.Errorf("configure Pomodoro: %w: durations and long-break interval must be positive", ErrInvalidConfiguration)
+	}
+	if t.status != StatusIdle {
+		return fmt.Errorf("configure Pomodoro: %w: current status is %s", ErrInvalidTransition, t.status)
+	}
+	t.durations = durations
+	t.phase = PhaseFocus
+	t.duration = durations.Focus
+	t.elapsed = 0
+	t.startedAt = time.Time{}
+	t.completed = 0
+	return nil
+}
+
 func (t *Timer) State() State {
+	t.mu.Lock()
+	defer t.mu.Unlock()
 	t.refresh()
 	elapsed := t.elapsed
 	if t.status == StatusRunning {

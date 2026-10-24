@@ -87,6 +87,31 @@ func TestPomodoroUsesDefaultDurations(t *testing.T) {
 	}
 }
 
+func TestPomodoroConfigureRequiresIdleAndResetsCycle(t *testing.T) {
+	clock := &fakeClock{now: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)}
+	pomodoro, err := NewPomodoro(clock, DefaultDurations())
+	if err != nil {
+		t.Fatalf("NewPomodoro() returned an error: %v", err)
+	}
+	durations := Durations{Focus: 10 * time.Minute, ShortBreak: 2 * time.Minute, LongBreak: 5 * time.Minute, LongBreakEvery: 3}
+
+	if err := pomodoro.Start(); err != nil {
+		t.Fatalf("Start() returned an error: %v", err)
+	}
+	if err := pomodoro.Configure(durations); !errors.Is(err, ErrInvalidTransition) {
+		t.Fatalf("Configure() while running error = %v, want %v", err, ErrInvalidTransition)
+	}
+	pomodoro.Reset()
+	if err := pomodoro.Configure(durations); err != nil {
+		t.Fatalf("Configure() while idle returned an error: %v", err)
+	}
+	state := pomodoro.State()
+	if state.Status != StatusIdle || state.Phase != PhaseFocus || state.Duration != durations.Focus ||
+		state.Elapsed != 0 || state.CompletedFocuses != 0 {
+		t.Errorf("State() after Configure() = %+v", state)
+	}
+}
+
 func TestPomodoroPhaseCycle(t *testing.T) {
 	clock := &fakeClock{now: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)}
 	durations := Durations{Focus: time.Minute, ShortBreak: 10 * time.Second, LongBreak: 30 * time.Second, LongBreakEvery: 2}
