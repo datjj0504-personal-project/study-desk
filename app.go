@@ -46,11 +46,13 @@ type App struct {
 	noteRepo     notes.Repository
 	settingsRepo settings.Repository
 	settingsErr  error
+	timerStates  timer.StateRepository
 	pomodoro     *timer.Timer
 	timerErr     error
 	pomodoroMu   sync.Mutex
 	stopwatch    *timer.Timer
 	stopwatchErr error
+	stopwatchMu  sync.Mutex
 	startupErr   error
 }
 
@@ -75,15 +77,24 @@ func (a *App) startup(ctx context.Context) {
 	}
 	a.noteRepo = storage.NewNoteRepository(a.db)
 	a.settingsRepo = storage.NewSettingsRepository(a.db)
+	a.timerStates = storage.NewTimerStateRepository(a.db)
 	timerSettings, err := a.settingsRepo.LoadTimerSettings(ctx)
 	if err != nil {
 		a.settingsErr = err
-		log.Printf("load timer settings: %v", err)
-		return
-	}
-	if err := a.pomodoro.Configure(timerSettings.Durations()); err != nil {
 		a.timerErr = err
-		log.Printf("configure Pomodoro timer: %v", err)
+		log.Printf("load timer settings: %v", err)
+	} else {
+		if err := a.pomodoro.Configure(timerSettings.Durations()); err != nil {
+			a.timerErr = err
+			log.Printf("configure Pomodoro timer: %v", err)
+		} else if err := a.restoreTimerState(a.pomodoro); err != nil {
+			a.timerErr = err
+			log.Printf("restore Pomodoro timer: %v", err)
+		}
+	}
+	if err := a.restoreTimerState(a.stopwatch); err != nil {
+		a.stopwatchErr = err
+		log.Printf("restore stopwatch: %v", err)
 	}
 }
 
@@ -220,10 +231,11 @@ func (a *App) StartPomodoro() error {
 	if err != nil {
 		return err
 	}
+	previous := pomodoro.Snapshot()
 	if err := pomodoro.Start(); err != nil {
 		return fmt.Errorf("start Pomodoro: %w", err)
 	}
-	return nil
+	return a.persistTimerChange(pomodoro, previous)
 }
 
 // PausePomodoro pauses a running Pomodoro phase.
@@ -234,10 +246,11 @@ func (a *App) PausePomodoro() error {
 	if err != nil {
 		return err
 	}
+	previous := pomodoro.Snapshot()
 	if err := pomodoro.Pause(); err != nil {
 		return fmt.Errorf("pause Pomodoro: %w", err)
 	}
-	return nil
+	return a.persistTimerChange(pomodoro, previous)
 }
 
 // ResumePomodoro resumes a paused Pomodoro phase.
@@ -248,10 +261,11 @@ func (a *App) ResumePomodoro() error {
 	if err != nil {
 		return err
 	}
+	previous := pomodoro.Snapshot()
 	if err := pomodoro.Resume(); err != nil {
 		return fmt.Errorf("resume Pomodoro: %w", err)
 	}
-	return nil
+	return a.persistTimerChange(pomodoro, previous)
 }
 
 // ResetPomodoro resets the complete Pomodoro cycle to its initial focus phase.
@@ -262,8 +276,9 @@ func (a *App) ResetPomodoro() error {
 	if err != nil {
 		return err
 	}
+	previous := pomodoro.Snapshot()
 	pomodoro.Reset()
-	return nil
+	return a.persistTimerChange(pomodoro, previous)
 }
 
 // AdvancePomodoro moves a completed phase to the next phase.
@@ -274,10 +289,11 @@ func (a *App) AdvancePomodoro() error {
 	if err != nil {
 		return err
 	}
+	previous := pomodoro.Snapshot()
 	if err := pomodoro.Advance(); err != nil {
 		return fmt.Errorf("advance Pomodoro: %w", err)
 	}
-	return nil
+	return a.persistTimerChange(pomodoro, previous)
 }
 
 // GetTimerSettings returns the persisted Pomodoro configuration.
@@ -323,8 +339,29 @@ func (a *App) UpdateTimerSettings(value settings.TimerSettings) error {
 		return fmt.Errorf("save timer settings: %w", err)
 	}
 	if durationsChanged {
+		previous := pomodoro.Snapshot()
 		if err := pomodoro.Configure(value.Durations()); err != nil {
+			if rollbackErr := repo.SaveTimerSettings(a.ctx, current); rollbackErr != nil {
+				return fmt.Errorf("configure timer settings: %w (restore previous settings: %v)", err, rollbackErr)
+			}
 			return fmt.Errorf("configure timer settings: %w", err)
+		}
+		if a.timerStates == nil || a.ctx == nil {
+			err = errors.New("timer state persistence is unavailable before application startup")
+		} else {
+			err = a.timerStates.SaveTimerState(a.ctx, pomodoro.Snapshot())
+		}
+		if err != nil {
+			if restoreErr := pomodoro.Configure(current.Durations()); restoreErr != nil {
+				return fmt.Errorf("save updated timer state: %w (restore previous timer configuration: %v)", err, restoreErr)
+			}
+			if restoreErr := pomodoro.Restore(previous); restoreErr != nil {
+				return fmt.Errorf("save updated timer state: %w (restore previous timer state: %v)", err, restoreErr)
+			}
+			if rollbackErr := repo.SaveTimerSettings(a.ctx, current); rollbackErr != nil {
+				return fmt.Errorf("save updated timer state: %w (restore previous settings: %v)", err, rollbackErr)
+			}
+			return fmt.Errorf("save updated timer state: %w", err)
 		}
 	}
 	return nil
@@ -332,6 +369,8 @@ func (a *App) UpdateTimerSettings(value settings.TimerSettings) error {
 
 // GetStopwatchState returns the current stopwatch status and elapsed time.
 func (a *App) GetStopwatchState() (StopwatchState, error) {
+	a.stopwatchMu.Lock()
+	defer a.stopwatchMu.Unlock()
 	stopwatch, err := a.stopwatchTimer()
 	if err != nil {
 		return StopwatchState{}, err
@@ -345,47 +384,91 @@ func (a *App) GetStopwatchState() (StopwatchState, error) {
 
 // StartStopwatch starts an idle stopwatch.
 func (a *App) StartStopwatch() error {
+	a.stopwatchMu.Lock()
+	defer a.stopwatchMu.Unlock()
 	stopwatch, err := a.stopwatchTimer()
 	if err != nil {
 		return err
 	}
+	previous := stopwatch.Snapshot()
 	if err := stopwatch.Start(); err != nil {
 		return fmt.Errorf("start stopwatch: %w", err)
 	}
-	return nil
+	return a.persistTimerChange(stopwatch, previous)
 }
 
 // PauseStopwatch pauses a running stopwatch.
 func (a *App) PauseStopwatch() error {
+	a.stopwatchMu.Lock()
+	defer a.stopwatchMu.Unlock()
 	stopwatch, err := a.stopwatchTimer()
 	if err != nil {
 		return err
 	}
+	previous := stopwatch.Snapshot()
 	if err := stopwatch.Pause(); err != nil {
 		return fmt.Errorf("pause stopwatch: %w", err)
 	}
-	return nil
+	return a.persistTimerChange(stopwatch, previous)
 }
 
 // ResumeStopwatch resumes a paused stopwatch.
 func (a *App) ResumeStopwatch() error {
+	a.stopwatchMu.Lock()
+	defer a.stopwatchMu.Unlock()
 	stopwatch, err := a.stopwatchTimer()
 	if err != nil {
 		return err
 	}
+	previous := stopwatch.Snapshot()
 	if err := stopwatch.Resume(); err != nil {
 		return fmt.Errorf("resume stopwatch: %w", err)
 	}
-	return nil
+	return a.persistTimerChange(stopwatch, previous)
 }
 
 // ResetStopwatch resets the stopwatch to idle with no elapsed time.
 func (a *App) ResetStopwatch() error {
+	a.stopwatchMu.Lock()
+	defer a.stopwatchMu.Unlock()
 	stopwatch, err := a.stopwatchTimer()
 	if err != nil {
 		return err
 	}
+	previous := stopwatch.Snapshot()
 	stopwatch.Reset()
+	return a.persistTimerChange(stopwatch, previous)
+}
+
+func (a *App) restoreTimerState(value *timer.Timer) error {
+	if a.timerStates == nil || a.ctx == nil {
+		return errors.New("timer state persistence is unavailable before application startup")
+	}
+	mode := value.State().Mode
+	snapshot, found, err := a.timerStates.LoadTimerState(a.ctx, mode)
+	if err != nil {
+		return fmt.Errorf("load %s state: %w", mode, err)
+	}
+	if !found {
+		return nil
+	}
+	if err := value.Restore(snapshot); err != nil {
+		return fmt.Errorf("restore %s state: %w", mode, err)
+	}
+	return nil
+}
+
+func (a *App) persistTimerChange(value *timer.Timer, previous timer.Snapshot) error {
+	if a.timerStates == nil || a.ctx == nil {
+		return errors.New("timer state persistence is unavailable before application startup")
+	}
+	snapshot := value.Snapshot()
+	if err := a.timerStates.SaveTimerState(a.ctx, snapshot); err != nil {
+		if restoreErr := value.Restore(previous); restoreErr != nil {
+			return fmt.Errorf("save %s state: %w (restore previous state: %v)", snapshot.Mode, err, restoreErr)
+		}
+		return fmt.Errorf("save %s state: %w", snapshot.Mode, err)
+	}
 	return nil
 }
 

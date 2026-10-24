@@ -16,8 +16,34 @@ type appTestClock struct {
 	now time.Time
 }
 
+type failingTimerStateRepository struct {
+	err error
+}
+
+func (r failingTimerStateRepository) LoadTimerState(context.Context, timer.Mode) (timer.Snapshot, bool, error) {
+	return timer.Snapshot{}, false, r.err
+}
+
+func (r failingTimerStateRepository) SaveTimerState(context.Context, timer.Snapshot) error {
+	return r.err
+}
+
 func (c *appTestClock) Now() time.Time {
 	return c.now
+}
+
+func newAppTimerStateRepository(t *testing.T) timer.StateRepository {
+	t.Helper()
+	db, err := storage.OpenDatabase(context.Background(), ":memory:")
+	if err != nil {
+		t.Fatalf("OpenDatabase() returned an error: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := db.Close(); err != nil {
+			t.Errorf("close SQLite database: %v", err)
+		}
+	})
+	return storage.NewTimerStateRepository(db)
 }
 
 func TestGetAppInfo(t *testing.T) {
@@ -118,7 +144,7 @@ func TestAppPomodoroControls(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewPomodoro() returned an error: %v", err)
 	}
-	app := &App{ctx: ctx, pomodoro: pomodoro}
+	app := &App{ctx: ctx, pomodoro: pomodoro, timerStates: newAppTimerStateRepository(t)}
 
 	state, err := app.GetPomodoroState()
 	if err != nil {
@@ -187,6 +213,7 @@ func TestAppPomodoroRejectsInvalidTransitions(t *testing.T) {
 	}
 	app.ctx = context.Background()
 	app.pomodoro = pomodoro
+	app.timerStates = newAppTimerStateRepository(t)
 	if err := app.PausePomodoro(); !errors.Is(err, timer.ErrInvalidTransition) {
 		t.Errorf("PausePomodoro() while idle error = %v, want %v", err, timer.ErrInvalidTransition)
 	}
@@ -214,6 +241,7 @@ func TestAppTimerSettingsPersistAndRequireIdleForDurationChanges(t *testing.T) {
 		ctx:          ctx,
 		settingsRepo: storage.NewSettingsRepository(db),
 		pomodoro:     pomodoro,
+		timerStates:  storage.NewTimerStateRepository(db),
 	}
 
 	updated := settings.TimerSettings{
@@ -260,6 +288,107 @@ func TestAppTimerSettingsPersistAndRequireIdleForDurationChanges(t *testing.T) {
 	}
 }
 
+func TestAppRestoresTimersAfterRestartAndSleep(t *testing.T) {
+	ctx := context.Background()
+	db, err := storage.OpenDatabase(ctx, ":memory:")
+	if err != nil {
+		t.Fatalf("OpenDatabase() returned an error: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := db.Close(); err != nil {
+			t.Errorf("close SQLite database: %v", err)
+		}
+	})
+	clock := &appTestClock{now: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)}
+	settingsRepo := storage.NewSettingsRepository(db)
+	stateRepo := storage.NewTimerStateRepository(db)
+	pomodoro, err := timer.NewPomodoro(clock, timer.DefaultDurations())
+	if err != nil {
+		t.Fatalf("NewPomodoro() returned an error: %v", err)
+	}
+	stopwatch, err := timer.NewStopwatch(clock)
+	if err != nil {
+		t.Fatalf("NewStopwatch() returned an error: %v", err)
+	}
+	firstRun := &App{
+		ctx: ctx, settingsRepo: settingsRepo, timerStates: stateRepo,
+		pomodoro: pomodoro, stopwatch: stopwatch,
+	}
+	if err := firstRun.StartPomodoro(); err != nil {
+		t.Fatalf("StartPomodoro() returned an error: %v", err)
+	}
+	if err := firstRun.StartStopwatch(); err != nil {
+		t.Fatalf("StartStopwatch() returned an error: %v", err)
+	}
+	clock.now = clock.now.Add(2 * time.Minute)
+
+	restartedPomodoro, err := timer.NewPomodoro(clock, timer.DefaultDurations())
+	if err != nil {
+		t.Fatalf("NewPomodoro() after restart returned an error: %v", err)
+	}
+	restartedStopwatch, err := timer.NewStopwatch(clock)
+	if err != nil {
+		t.Fatalf("NewStopwatch() after restart returned an error: %v", err)
+	}
+	restored := &App{
+		ctx: ctx, settingsRepo: settingsRepo, timerStates: stateRepo,
+		pomodoro: restartedPomodoro, stopwatch: restartedStopwatch,
+	}
+	loadedSettings, err := settingsRepo.LoadTimerSettings(ctx)
+	if err != nil {
+		t.Fatalf("LoadTimerSettings() returned an error: %v", err)
+	}
+	if err := restartedPomodoro.Configure(loadedSettings.Durations()); err != nil {
+		t.Fatalf("Configure() returned an error: %v", err)
+	}
+	if err := restored.restoreTimerState(restartedPomodoro); err != nil {
+		t.Fatalf("restore Pomodoro state returned an error: %v", err)
+	}
+	if err := restored.restoreTimerState(restartedStopwatch); err != nil {
+		t.Fatalf("restore stopwatch state returned an error: %v", err)
+	}
+
+	clock.now = clock.now.Add(24 * time.Minute)
+	pomodoroState, err := restored.GetPomodoroState()
+	if err != nil {
+		t.Fatalf("GetPomodoroState() after restart returned an error: %v", err)
+	}
+	if pomodoroState.Status != timer.StatusCompleted || pomodoroState.ElapsedMillis != 25*60*1000 {
+		t.Errorf("Pomodoro state after restart and sleep = %+v", pomodoroState)
+	}
+	stopwatchState, err := restored.GetStopwatchState()
+	if err != nil {
+		t.Fatalf("GetStopwatchState() after restart returned an error: %v", err)
+	}
+	if stopwatchState.Status != timer.StatusRunning || stopwatchState.ElapsedMillis != 26*60*1000 {
+		t.Errorf("stopwatch state after restart and sleep = %+v", stopwatchState)
+	}
+}
+
+func TestAppTimerControlRollsBackWhenPersistenceFails(t *testing.T) {
+	ctx := context.Background()
+	pomodoro, err := timer.NewPomodoro(&appTestClock{now: time.Now()}, timer.DefaultDurations())
+	if err != nil {
+		t.Fatalf("NewPomodoro() returned an error: %v", err)
+	}
+	app := &App{
+		ctx:         ctx,
+		pomodoro:    pomodoro,
+		timerStates: failingTimerStateRepository{err: errors.New("disk unavailable")},
+	}
+
+	if err := app.StartPomodoro(); err == nil {
+		t.Fatal("StartPomodoro() succeeded despite persistence failure")
+	}
+	state, err := app.GetPomodoroState()
+	if err != nil {
+		t.Fatalf("GetPomodoroState() returned an error: %v", err)
+	}
+	if state.Status != timer.StatusIdle {
+		t.Errorf("timer status after failed persistence = %s, want idle", state.Status)
+	}
+}
+
 func TestAppStopwatchControls(t *testing.T) {
 	ctx := context.Background()
 	clock := &appTestClock{now: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)}
@@ -267,7 +396,7 @@ func TestAppStopwatchControls(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewStopwatch() returned an error: %v", err)
 	}
-	app := &App{ctx: ctx, stopwatch: stopwatch}
+	app := &App{ctx: ctx, stopwatch: stopwatch, timerStates: newAppTimerStateRepository(t)}
 
 	state, err := app.GetStopwatchState()
 	if err != nil {
@@ -336,6 +465,7 @@ func TestAppStopwatchRejectsInvalidTransitions(t *testing.T) {
 	}
 	app.ctx = context.Background()
 	app.stopwatch = stopwatch
+	app.timerStates = newAppTimerStateRepository(t)
 	if err := app.PauseStopwatch(); !errors.Is(err, timer.ErrInvalidTransition) {
 		t.Errorf("PauseStopwatch() while idle error = %v, want %v", err, timer.ErrInvalidTransition)
 	}

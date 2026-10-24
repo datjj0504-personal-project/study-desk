@@ -1,6 +1,6 @@
 # StudyDesk Project Status
 
-Single source of truth for progress. Last updated: 2026-10-24 (P4-005 marked done).
+Single source of truth for progress. Last updated: 2026-10-24 (P4-006 marked done).
 
 ## A. Project Overview
 
@@ -19,7 +19,7 @@ Single source of truth for progress. Last updated: 2026-10-24 (P4-005 marked don
 | Wails integration | DONE | Wails CLI v2.17.0, `wails doctor` passes, `wails build` succeeds, bindings generated, `GetAppInfo` round trip accepted by the user. |
 | Database | DONE | Pure-Go SQLite driver, app-data initialization, and versioned schema migrations are implemented. |
 | Notes feature | DONE | Note CRUD, autosave, title/body search, subject organization, and feature tests are implemented. |
-| Timer and stopwatch | IN_PROGRESS | Pomodoro and stopwatch controls, configurable persisted durations, completion notifications, and frontend pages are implemented. |
+| Timer and stopwatch | IN_PROGRESS | Pomodoro and stopwatch controls, configurable persisted durations, completion notifications, restart recovery, and elapsed-time handling across sleep are implemented. |
 | Testing | IN_PROGRESS | Go storage/domain and frontend service/page tests are in place; expand coverage as features land. |
 | Build and packaging | IN_PROGRESS | `wails build` produced `build/bin/studydesk.exe`, which launches. No installer. |
 
@@ -127,13 +127,19 @@ Single source of truth for progress. Last updated: 2026-10-24 (P4-005 marked don
 - **Validation:** `go test ./...`, `go vet ./...`, `go build ./...`, `wails build`, `frontend: npm run test` (9 files, 29 tests), `frontend: npm run build`, and `git diff --check` passed.
 - **Files:** `app.go`, `app_test.go`, `internal/{settings,storage,timer}`, `frontend/src/{App.tsx,components/PomodoroNotificationMonitor.tsx,pages/SettingsPage.tsx,services/settings.ts}`, `ai/PROJECT_STATUS.md`.
 
+### P4-006: App restart, sleep, timing accuracy
+- **Completed:** 2026-10-24
+- **Summary:** Added durable snapshots for running, paused, idle, and completed timer state using the existing settings table. App startup restores Pomodoro and stopwatch state, and wall-clock timestamps ensure elapsed time includes system sleep and time while the app is closed. Timer control changes roll back in-memory state if persistence fails.
+- **Validation:** `go test ./... -count=1`, `go vet ./...`, `go build ./...`, `frontend: npm run test`, `frontend: npm run build`, `wails build`, and `git diff --check` passed.
+- **Files:** `app.go`, `app_test.go`, `internal/timer/{timer.go,repository.go,timer_test.go,README.md}`, `internal/storage/{timer_state_repository.go,timer_state_repository_test.go,README.md}`, `docs/04-testing/testing-strategy.md`, `ai/PROJECT_STATUS.md`.
+
 ## D. Current Task
 
 No task is currently in progress.
 
 ## E. Remaining Tasks and Roadmap
 
-Statuses: NOT_STARTED unless noted. P1-001 through P1-005, P2-001 through P2-003, P3-001 through P3-006, and P4-001 through P4-005 are complete.
+Statuses: NOT_STARTED unless noted. P1-001 through P1-005, P2-001 through P2-003, P3-001 through P3-006, and P4-001 through P4-006 are complete.
 
 **Phase 1 — Foundation**
 - P1-004: DONE (see C).
@@ -158,7 +164,7 @@ Statuses: NOT_STARTED unless noted. P1-001 through P1-005, P2-001 through P2-003
 - P4-003: DONE — Stopwatch controls and state exposed through Wails. (see C)
 - P4-004: DONE — Pomodoro and stopwatch UI with Wails controls and live snapshots. (see C)
 - P4-005: DONE — Notifications and configurable durations. (see C)
-- P4-006: App restart, sleep, timing accuracy. Depends on: P4-002, P2-002.
+- P4-006: DONE — App restart, sleep, timing accuracy. (see C)
 - P4-007: Timer tests and validation. Depends on: P4-002.
 
 **Phase 5 — Study Tracking**

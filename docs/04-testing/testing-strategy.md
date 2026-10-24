@@ -19,6 +19,6 @@
 
 ## Manual checks
 
-- Smoke test via `wails dev` for timer behavior, window close, and restart persistence, until end-to-end automation is justified.
+- Smoke test via `wails dev` for timer behavior, window close, restart persistence, and elapsed-time behavior after system sleep, until end-to-end automation is justified. Automated timer tests use an injected clock to simulate sleep and app restarts deterministically.
 
 Requirements being verified: [functional](../01-requirements/functional-requirements.md), [non-functional](../01-requirements/non-functional-requirements.md).

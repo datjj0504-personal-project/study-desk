@@ -68,6 +68,16 @@ type State struct {
 	CompletedFocuses int           `json:"completedFocuses"`
 }
 
+type Snapshot struct {
+	Mode              Mode          `json:"mode"`
+	Phase             Phase         `json:"phase"`
+	Status            Status        `json:"status"`
+	Duration          time.Duration `json:"duration"`
+	Elapsed           time.Duration `json:"elapsed"`
+	StartedAtUnixNano int64         `json:"startedAtUnixNano"`
+	CompletedFocuses  int           `json:"completedFocuses"`
+}
+
 // Timer owns one Pomodoro or stopwatch timeline.
 type Timer struct {
 	mu        sync.Mutex
@@ -130,7 +140,7 @@ func (t *Timer) Pause() error {
 	if t.status != StatusRunning {
 		return fmt.Errorf("pause timer: %w: current status is %s", ErrInvalidTransition, t.status)
 	}
-	t.elapsed += nonNegative(t.clock.Now().Sub(t.startedAt))
+	t.elapsed += wallElapsed(t.clock.Now(), t.startedAt)
 	t.startedAt = time.Time{}
 	t.status = StatusPaused
 	return nil
@@ -223,7 +233,7 @@ func (t *Timer) State() State {
 	t.refresh()
 	elapsed := t.elapsed
 	if t.status == StatusRunning {
-		elapsed += nonNegative(t.clock.Now().Sub(t.startedAt))
+		elapsed += wallElapsed(t.clock.Now(), t.startedAt)
 	}
 	if t.mode == ModePomodoro && elapsed > t.duration {
 		elapsed = t.duration
@@ -243,15 +253,110 @@ func (t *Timer) State() State {
 	}
 }
 
+// Snapshot returns state that can be saved and restored across app restarts.
+func (t *Timer) Snapshot() Snapshot {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.refresh()
+	now := t.clock.Now()
+	elapsed := t.elapsed
+	startedAt := int64(0)
+	if t.status == StatusRunning {
+		elapsed += wallElapsed(now, t.startedAt)
+		startedAt = now.UnixNano()
+	}
+	if t.mode == ModePomodoro && elapsed > t.duration {
+		elapsed = t.duration
+	}
+	return Snapshot{
+		Mode:              t.mode,
+		Phase:             t.phase,
+		Status:            t.status,
+		Duration:          t.duration,
+		Elapsed:           elapsed,
+		StartedAtUnixNano: startedAt,
+		CompletedFocuses:  t.completed,
+	}
+}
+
+// Restore replaces timer state from a previously saved snapshot.
+func (t *Timer) Restore(snapshot Snapshot) error {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if snapshot.Mode != t.mode || snapshot.Elapsed < 0 || snapshot.CompletedFocuses < 0 {
+		return fmt.Errorf("restore timer: %w: snapshot does not match timer configuration", ErrInvalidConfiguration)
+	}
+	switch snapshot.Status {
+	case StatusIdle, StatusPaused:
+	case StatusRunning:
+		if snapshot.StartedAtUnixNano == 0 {
+			return fmt.Errorf("restore timer: %w: running snapshot has no start time", ErrInvalidConfiguration)
+		}
+	case StatusCompleted:
+		if t.mode != ModePomodoro {
+			return fmt.Errorf("restore timer: %w: stopwatch cannot be completed", ErrInvalidConfiguration)
+		}
+	default:
+		return fmt.Errorf("restore timer: %w: unsupported status %s", ErrInvalidConfiguration, snapshot.Status)
+	}
+	if t.mode == ModePomodoro {
+		var expectedDuration time.Duration
+		switch snapshot.Phase {
+		case PhaseFocus:
+			expectedDuration = t.durations.Focus
+		case PhaseShortBreak:
+			expectedDuration = t.durations.ShortBreak
+		case PhaseLongBreak:
+			expectedDuration = t.durations.LongBreak
+		default:
+			return fmt.Errorf("restore timer: %w: unsupported Pomodoro phase %s", ErrInvalidConfiguration, snapshot.Phase)
+		}
+		if snapshot.Duration != expectedDuration || snapshot.Elapsed > snapshot.Duration {
+			return fmt.Errorf("restore timer: %w: Pomodoro snapshot duration or elapsed time is invalid", ErrInvalidConfiguration)
+		}
+		if snapshot.Status == StatusIdle && snapshot.Elapsed != 0 {
+			return fmt.Errorf("restore timer: %w: idle Pomodoro snapshot has elapsed time", ErrInvalidConfiguration)
+		}
+		if snapshot.Status == StatusPaused && snapshot.Elapsed >= snapshot.Duration {
+			return fmt.Errorf("restore timer: %w: paused Pomodoro snapshot has reached its deadline", ErrInvalidConfiguration)
+		}
+		if snapshot.Status == StatusCompleted && snapshot.Elapsed != snapshot.Duration {
+			return fmt.Errorf("restore timer: %w: completed Pomodoro snapshot has incomplete elapsed time", ErrInvalidConfiguration)
+		}
+	} else if snapshot.Phase != PhaseStopwatch || snapshot.Duration != 0 || snapshot.Status == StatusCompleted {
+		return fmt.Errorf("restore timer: %w: stopwatch snapshot is invalid", ErrInvalidConfiguration)
+	}
+	if snapshot.Status != StatusRunning && snapshot.StartedAtUnixNano != 0 {
+		return fmt.Errorf("restore timer: %w: inactive snapshot has a start time", ErrInvalidConfiguration)
+	}
+	t.phase = snapshot.Phase
+	t.status = snapshot.Status
+	t.duration = snapshot.Duration
+	t.elapsed = snapshot.Elapsed
+	t.completed = snapshot.CompletedFocuses
+	t.startedAt = time.Time{}
+	if snapshot.Status == StatusRunning {
+		t.startedAt = time.Unix(0, snapshot.StartedAtUnixNano)
+	}
+	t.refresh()
+	return nil
+}
+
 func (t *Timer) refresh() {
 	if t.status != StatusRunning || t.mode != ModePomodoro {
 		return
 	}
-	if nonNegative(t.clock.Now().Sub(t.startedAt))+t.elapsed >= t.duration {
+	if wallElapsed(t.clock.Now(), t.startedAt)+t.elapsed >= t.duration {
 		t.elapsed = t.duration
 		t.startedAt = time.Time{}
 		t.status = StatusCompleted
 	}
+}
+
+func wallElapsed(now, then time.Time) time.Duration {
+	wallNow := time.Unix(0, now.UnixNano())
+	wallThen := time.Unix(0, then.UnixNano())
+	return nonNegative(wallNow.Sub(wallThen))
 }
 
 func nonNegative(duration time.Duration) time.Duration {
