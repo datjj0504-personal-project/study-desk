@@ -1,0 +1,400 @@
+package timer
+
+import (
+	"errors"
+	"fmt"
+	"sync"
+	"time"
+)
+
+var (
+	ErrInvalidConfiguration = errors.New("invalid timer configuration")
+	ErrInvalidTransition    = errors.New("invalid timer state transition")
+)
+
+type Mode string
+
+const (
+	ModePomodoro  Mode = "pomodoro"
+	ModeStopwatch Mode = "stopwatch"
+)
+
+type Phase string
+
+const (
+	PhaseFocus      Phase = "focus"
+	PhaseShortBreak Phase = "short_break"
+	PhaseLongBreak  Phase = "long_break"
+	PhaseStopwatch  Phase = "stopwatch"
+)
+
+type Status string
+
+const (
+	StatusIdle      Status = "idle"
+	StatusRunning   Status = "running"
+	StatusPaused    Status = "paused"
+	StatusCompleted Status = "completed"
+)
+
+// Clock supplies the current time to timer state transitions.
+type Clock interface {
+	Now() time.Time
+}
+
+type Durations struct {
+	Focus          time.Duration
+	ShortBreak     time.Duration
+	LongBreak      time.Duration
+	LongBreakEvery int
+}
+
+func DefaultDurations() Durations {
+	return Durations{
+		Focus:          25 * time.Minute,
+		ShortBreak:     5 * time.Minute,
+		LongBreak:      15 * time.Minute,
+		LongBreakEvery: 4,
+	}
+}
+
+type State struct {
+	Mode             Mode          `json:"mode"`
+	Phase            Phase         `json:"phase"`
+	Status           Status        `json:"status"`
+	Duration         time.Duration `json:"duration"`
+	Elapsed          time.Duration `json:"elapsed"`
+	Remaining        time.Duration `json:"remaining"`
+	CompletedFocuses int           `json:"completedFocuses"`
+}
+
+type Snapshot struct {
+	Mode                     Mode          `json:"mode"`
+	Phase                    Phase         `json:"phase"`
+	Status                   Status        `json:"status"`
+	Duration                 time.Duration `json:"duration"`
+	Elapsed                  time.Duration `json:"elapsed"`
+	StartedAtUnixNano        int64         `json:"startedAtUnixNano"`
+	SessionStartedAtUnixNano int64         `json:"sessionStartedAtUnixNano"`
+	CompletedFocuses         int           `json:"completedFocuses"`
+}
+
+// Timer owns one Pomodoro or stopwatch timeline.
+type Timer struct {
+	mu               sync.Mutex
+	clock            Clock
+	mode             Mode
+	durations        Durations
+	phase            Phase
+	status           Status
+	duration         time.Duration
+	elapsed          time.Duration
+	startedAt        time.Time
+	sessionStartedAt time.Time
+	completed        int
+}
+
+func NewPomodoro(clock Clock, durations Durations) (*Timer, error) {
+	if clock == nil {
+		return nil, fmt.Errorf("create Pomodoro: %w: clock is required", ErrInvalidConfiguration)
+	}
+	if durations.Focus <= 0 || durations.ShortBreak <= 0 || durations.LongBreak <= 0 || durations.LongBreakEvery <= 0 {
+		return nil, fmt.Errorf("create Pomodoro: %w: durations and long-break interval must be positive", ErrInvalidConfiguration)
+	}
+	return &Timer{
+		clock:     clock,
+		mode:      ModePomodoro,
+		durations: durations,
+		phase:     PhaseFocus,
+		status:    StatusIdle,
+		duration:  durations.Focus,
+	}, nil
+}
+
+func NewStopwatch(clock Clock) (*Timer, error) {
+	if clock == nil {
+		return nil, fmt.Errorf("create stopwatch: %w: clock is required", ErrInvalidConfiguration)
+	}
+	return &Timer{
+		clock:  clock,
+		mode:   ModeStopwatch,
+		phase:  PhaseStopwatch,
+		status: StatusIdle,
+	}, nil
+}
+
+func (t *Timer) Start() error {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.refresh()
+	if t.status != StatusIdle {
+		return fmt.Errorf("start timer: %w: current status is %s", ErrInvalidTransition, t.status)
+	}
+	t.startedAt = t.clock.Now()
+	t.sessionStartedAt = t.startedAt
+	t.status = StatusRunning
+	return nil
+}
+
+func (t *Timer) Pause() error {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.refresh()
+	if t.status != StatusRunning {
+		return fmt.Errorf("pause timer: %w: current status is %s", ErrInvalidTransition, t.status)
+	}
+	t.elapsed += wallElapsed(t.clock.Now(), t.startedAt)
+	t.startedAt = time.Time{}
+	t.status = StatusPaused
+	return nil
+}
+
+func (t *Timer) Resume() error {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.refresh()
+	if t.status != StatusPaused {
+		return fmt.Errorf("resume timer: %w: current status is %s", ErrInvalidTransition, t.status)
+	}
+	t.startedAt = t.clock.Now()
+	t.status = StatusRunning
+	return nil
+}
+
+func (t *Timer) Reset() {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.phase = PhaseStopwatch
+	t.status = StatusIdle
+	t.duration = 0
+	t.elapsed = 0
+	t.startedAt = time.Time{}
+	t.sessionStartedAt = time.Time{}
+	t.completed = 0
+	if t.mode == ModePomodoro {
+		t.phase = PhaseFocus
+		t.duration = t.durations.Focus
+	}
+}
+
+// Advance moves a completed Pomodoro to its next phase and leaves it idle.
+func (t *Timer) Advance() error {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.refresh()
+	if t.mode != ModePomodoro || t.status != StatusCompleted {
+		return fmt.Errorf("advance timer: %w: a completed Pomodoro phase is required", ErrInvalidTransition)
+	}
+
+	switch t.phase {
+	case PhaseFocus:
+		t.completed++
+		if t.completed%t.durations.LongBreakEvery == 0 {
+			t.phase = PhaseLongBreak
+			t.duration = t.durations.LongBreak
+		} else {
+			t.phase = PhaseShortBreak
+			t.duration = t.durations.ShortBreak
+		}
+	case PhaseShortBreak, PhaseLongBreak:
+		t.phase = PhaseFocus
+		t.duration = t.durations.Focus
+	default:
+		return fmt.Errorf("advance timer: %w: unsupported phase %s", ErrInvalidTransition, t.phase)
+	}
+
+	t.elapsed = 0
+	t.startedAt = time.Time{}
+	t.sessionStartedAt = time.Time{}
+	t.status = StatusIdle
+	return nil
+}
+
+// Configure updates Pomodoro durations when no phase is active.
+func (t *Timer) Configure(durations Durations) error {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if t.mode != ModePomodoro {
+		return fmt.Errorf("configure timer: %w: only Pomodoro timers have durations", ErrInvalidConfiguration)
+	}
+	if durations.Focus <= 0 || durations.ShortBreak <= 0 || durations.LongBreak <= 0 || durations.LongBreakEvery <= 0 {
+		return fmt.Errorf("configure Pomodoro: %w: durations and long-break interval must be positive", ErrInvalidConfiguration)
+	}
+	if t.status != StatusIdle {
+		return fmt.Errorf("configure Pomodoro: %w: current status is %s", ErrInvalidTransition, t.status)
+	}
+	t.durations = durations
+	t.phase = PhaseFocus
+	t.duration = durations.Focus
+	t.elapsed = 0
+	t.startedAt = time.Time{}
+	t.sessionStartedAt = time.Time{}
+	t.completed = 0
+	return nil
+}
+
+func (t *Timer) State() State {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.refresh()
+	elapsed := t.elapsed
+	if t.status == StatusRunning {
+		elapsed += wallElapsed(t.clock.Now(), t.startedAt)
+	}
+	if t.mode == ModePomodoro && elapsed > t.duration {
+		elapsed = t.duration
+	}
+	remaining := time.Duration(0)
+	if t.mode == ModePomodoro && elapsed < t.duration {
+		remaining = t.duration - elapsed
+	}
+	return State{
+		Mode:             t.mode,
+		Phase:            t.phase,
+		Status:           t.status,
+		Duration:         t.duration,
+		Elapsed:          elapsed,
+		Remaining:        remaining,
+		CompletedFocuses: t.completed,
+	}
+}
+
+// Snapshot returns state that can be saved and restored across app restarts.
+func (t *Timer) Snapshot() Snapshot {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.refresh()
+	now := t.clock.Now()
+	elapsed := t.elapsed
+	startedAt := int64(0)
+	if t.status == StatusRunning {
+		elapsed += wallElapsed(now, t.startedAt)
+		startedAt = now.UnixNano()
+	}
+	if t.mode == ModePomodoro && elapsed > t.duration {
+		elapsed = t.duration
+	}
+	return Snapshot{
+		Mode:                     t.mode,
+		Phase:                    t.phase,
+		Status:                   t.status,
+		Duration:                 t.duration,
+		Elapsed:                  elapsed,
+		StartedAtUnixNano:        startedAt,
+		SessionStartedAtUnixNano: timestampOrZero(t.sessionStartedAt),
+		CompletedFocuses:         t.completed,
+	}
+}
+
+// Restore replaces timer state from a previously saved snapshot.
+func (t *Timer) Restore(snapshot Snapshot) error {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if snapshot.Mode != t.mode || snapshot.Elapsed < 0 || snapshot.Duration < 0 || snapshot.CompletedFocuses < 0 {
+		return fmt.Errorf("restore timer: %w: snapshot does not match timer configuration", ErrInvalidConfiguration)
+	}
+	switch snapshot.Status {
+	case StatusIdle, StatusPaused:
+	case StatusRunning:
+		if snapshot.StartedAtUnixNano == 0 {
+			return fmt.Errorf("restore timer: %w: running snapshot has no start time", ErrInvalidConfiguration)
+		}
+	case StatusCompleted:
+		if t.mode != ModePomodoro {
+			return fmt.Errorf("restore timer: %w: stopwatch cannot be completed", ErrInvalidConfiguration)
+		}
+	default:
+		return fmt.Errorf("restore timer: %w: unsupported status %s", ErrInvalidConfiguration, snapshot.Status)
+	}
+	if t.mode == ModePomodoro {
+		var expectedDuration time.Duration
+		switch snapshot.Phase {
+		case PhaseFocus:
+			expectedDuration = t.durations.Focus
+		case PhaseShortBreak:
+			expectedDuration = t.durations.ShortBreak
+		case PhaseLongBreak:
+			expectedDuration = t.durations.LongBreak
+		default:
+			return fmt.Errorf("restore timer: %w: unsupported Pomodoro phase %s", ErrInvalidConfiguration, snapshot.Phase)
+		}
+		if snapshot.Duration != expectedDuration || snapshot.Elapsed > snapshot.Duration {
+			return fmt.Errorf("restore timer: %w: Pomodoro snapshot duration or elapsed time is invalid", ErrInvalidConfiguration)
+		}
+		if snapshot.Status == StatusIdle && snapshot.Elapsed != 0 {
+			return fmt.Errorf("restore timer: %w: idle Pomodoro snapshot has elapsed time", ErrInvalidConfiguration)
+		}
+		if snapshot.Status == StatusPaused && snapshot.Elapsed >= snapshot.Duration {
+			return fmt.Errorf("restore timer: %w: paused Pomodoro snapshot has reached its deadline", ErrInvalidConfiguration)
+		}
+		if snapshot.Status == StatusCompleted && snapshot.Elapsed != snapshot.Duration {
+			return fmt.Errorf("restore timer: %w: completed Pomodoro snapshot has incomplete elapsed time", ErrInvalidConfiguration)
+		}
+	} else if snapshot.Phase != PhaseStopwatch || snapshot.Duration != 0 || snapshot.Status == StatusCompleted {
+		return fmt.Errorf("restore timer: %w: stopwatch snapshot is invalid", ErrInvalidConfiguration)
+	}
+	if snapshot.Status != StatusRunning && snapshot.StartedAtUnixNano != 0 {
+		return fmt.Errorf("restore timer: %w: inactive snapshot has a start time", ErrInvalidConfiguration)
+	}
+	if snapshot.Status == StatusIdle && snapshot.Elapsed != 0 {
+		return fmt.Errorf("restore timer: %w: idle snapshot has elapsed time", ErrInvalidConfiguration)
+	}
+	if snapshot.Status == StatusIdle && snapshot.SessionStartedAtUnixNano != 0 {
+		return fmt.Errorf("restore timer: %w: idle snapshot has a session start time", ErrInvalidConfiguration)
+	}
+	if snapshot.Status != StatusIdle && snapshot.SessionStartedAtUnixNano < 0 {
+		return fmt.Errorf("restore timer: %w: session start time is invalid", ErrInvalidConfiguration)
+	}
+	t.phase = snapshot.Phase
+	t.status = snapshot.Status
+	t.duration = snapshot.Duration
+	t.elapsed = snapshot.Elapsed
+	t.completed = snapshot.CompletedFocuses
+	t.startedAt = time.Time{}
+	t.sessionStartedAt = time.Time{}
+	if snapshot.SessionStartedAtUnixNano != 0 {
+		t.sessionStartedAt = time.Unix(0, snapshot.SessionStartedAtUnixNano)
+	} else if snapshot.Status != StatusIdle {
+		if snapshot.Status == StatusRunning {
+			t.sessionStartedAt = time.Unix(0, snapshot.StartedAtUnixNano).Add(-snapshot.Elapsed)
+		} else {
+			t.sessionStartedAt = t.clock.Now().Add(-snapshot.Elapsed)
+		}
+	}
+	if snapshot.Status == StatusRunning {
+		t.startedAt = time.Unix(0, snapshot.StartedAtUnixNano)
+	}
+	t.refresh()
+	return nil
+}
+
+func timestampOrZero(value time.Time) int64 {
+	if value.IsZero() {
+		return 0
+	}
+	return value.UnixNano()
+}
+
+func (t *Timer) refresh() {
+	if t.status != StatusRunning || t.mode != ModePomodoro {
+		return
+	}
+	if wallElapsed(t.clock.Now(), t.startedAt)+t.elapsed >= t.duration {
+		t.elapsed = t.duration
+		t.startedAt = time.Time{}
+		t.status = StatusCompleted
+	}
+}
+
+func wallElapsed(now, then time.Time) time.Duration {
+	wallNow := time.Unix(0, now.UnixNano())
+	wallThen := time.Unix(0, then.UnixNano())
+	return nonNegative(wallNow.Sub(wallThen))
+}
+
+func nonNegative(duration time.Duration) time.Duration {
+	if duration < 0 {
+		return 0
+	}
+	return duration
+}

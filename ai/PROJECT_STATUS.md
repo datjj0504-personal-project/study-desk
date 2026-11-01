@@ -1,0 +1,287 @@
+# StudyDesk Project Status
+
+Single source of truth for progress. Last updated: 2026-10-24 (P6-005 marked done).
+
+## A. Project Overview
+
+- **Project:** StudyDesk, a local-first personal study companion (notes, Pomodoro timer, stopwatch, session tracking, statistics).
+- **Platform:** Windows 10/11.
+- **Stack:** Go, Wails v2, React + TypeScript, Tailwind CSS v4, SQLite.
+- **Docs:** [README](../README.md), [project context](project-context.md), [architecture rules](architecture-rules.md), [docs/](../docs/00-project-context/project-overview.md).
+
+## B. Current Project State
+
+| Area | Status | Notes |
+| --- | --- | --- |
+| Project initialization | DONE | Structure, docs, and Wails app skeleton exist. |
+| Backend (Go) | IN_PROGRESS | `App` adapter, SQLite initialization, and notes persistence operations are implemented; other domains remain. |
+| Frontend | IN_PROGRESS | Dashboard, Notes, Timer, Stopwatch, Settings, Statistics, and Session History pages are implemented. |
+| Wails integration | DONE | Wails CLI v2.17.0, `wails doctor` passes, `wails build` succeeds, bindings generated, `GetAppInfo` round trip accepted by the user. |
+| Database | DONE | Pure-Go SQLite driver, app-data initialization, and versioned schema migrations are implemented. |
+| Notes feature | DONE | Note CRUD, autosave, title/body search, subject organization, and feature tests are implemented. |
+| Study sessions | IN_PROGRESS | Session persistence, automatic completion recording, history browsing/filtering, and daily/weekly/all-time/by-subject statistics are implemented. |
+| Timer and stopwatch | IN_PROGRESS | Pomodoro and stopwatch controls, configurable persisted durations, completion notifications, restart recovery, and elapsed-time handling across sleep are implemented. |
+| User preferences | DONE | Timer settings and system/light/dark theme preferences persist locally; the selected theme is applied across the UI. |
+| Error recovery UX | DONE | Notes loading and preference initialization failures remain distinct from empty/success states and offer retry actions. |
+| Testing | DONE | Go unit/integration suites, race checks, vet/build, frontend suite, and production type/build checks pass; App preference/navigation regression coverage is included. |
+| Build and packaging | IN_PROGRESS | Wails executable builds; Inno Setup configuration and repeatable installer/ZIP script are added, but Inno Setup is unavailable here, so installer compilation and clean-machine checks remain pending. |
+| Installation and data recovery | DONE | Windows install, `%APPDATA%` data location, and close-before-backup ZIP/restore instructions documented; installer behavior still needs clean-machine validation. |
+| Windows installer release | IN_PROGRESS | Installer source, WebView2 bootstrapper packaging, and versioned ZIP workflow are configured; compilation and installation behavior are not yet verified. |
+
+## C. Completed Tasks
+
+### P1-001: Inspect and establish project structure and progress tracking
+- **Completed:** 2026-10-18
+- **Summary:** Repository structure, README, `docs/`, and `ai/` guidance created; this file added.
+- **Validation:** Manual review of the directory tree and `git status`. No automated checks apply.
+- **Files:** `README.md`, `docs/**`, `ai/**`, `.gitignore`, `.editorconfig`, `.env.example`, reserved directory READMEs.
+
+### P1-002: Initialize a working Wails application
+- **Completed:** 2026-10-18 (with caveat: created without the Wails CLI)
+- **Summary:** Hand-written `main.go`, `app.go`, `wails.json`, `go.mod` (module `studydesk`, `wails/v2 v2.17.0`), root and `frontend/` `package.json`. Window title `StudyDesk`, 1200x800, min 900x600, dark theme.
+- **Validation:** `gofmt -l .` clean after formatting; `go vet -tags desktop,production ./...` exit 0; `go build -tags desktop,production -ldflags "-H windowsgui"` produced `build/bin/studydesk.exe` (about 17 MB); launching it kept the process alive for 6 s with window title `StudyDesk`. Not run: `wails doctor`, `wails dev`, `wails build`.
+- **Files:** `main.go`, `app.go`, `wails.json`, `go.mod`, `go.sum`, `package.json`, `frontend/package.json`, `frontend/tsconfig.json`, `frontend/vite.config.ts`, `frontend/index.html`.
+
+### P1-003: Build the initial StudyDesk UI shell
+- **Completed:** 2026-10-18
+- **Summary:** Dark sidebar (Dashboard, Notes, Focus Timer, Stopwatch, Study Statistics, Settings) with active state; dashboard with explicit placeholders for recent notes, focus timer, statistics; other pages show "Not implemented yet".
+- **Validation:** `npm run build` (`tsc --noEmit` strict, then `vite build`) passed. The window was confirmed to open, but the rendered UI was **not visually inspected**.
+- **Files:** `frontend/src/{main.tsx,App.tsx,index.css,vite-env.d.ts}`, `components/{Sidebar,PlaceholderCard}.tsx`, `pages/{DashboardPage,ComingSoonPage}.tsx`, `types/navigation.ts`.
+
+### P1-004: Establish frontend-to-Go communication and error handling
+- **Completed:** 2026-10-18
+- **Summary:** `App.GetAppInfo()` bound via Wails; bindings generated by the CLI into git-ignored `frontend/wailsjs/`; `services/appInfo.ts` wrapper with `toErrorMessage`, `hooks/useAppInfo.ts`, and `components/BackendStatus.tsx` on the dashboard (loading, connected, and error states).
+- **Validation:** `gofmt -l .` clean; `go vet ./...` clean; `wails build` succeeded; exe launched (process alive 6 s, title `StudyDesk`). The on-screen result was confirmed manually by the user (not by the AI) before marking done.
+- **Files:** `app.go`, `frontend/src/{services/appInfo.ts,hooks/useAppInfo.ts,components/BackendStatus.tsx,pages/DashboardPage.tsx,vite-env.d.ts}`, `.gitignore`.
+
+### P1-005: Add initial automated tests and development validation
+- **Completed:** 2026-10-19
+- **Summary:** Added a Go test for `GetAppInfo`, Vitest and React Testing Library with a jsdom environment, tests for `toErrorMessage` and the `BackendStatus` success/error states using a mocked service, and a frontend `test` script. Documented frontend test tooling in the README.
+- **Validation:** `gofmt -l app_test.go` clean; `go vet ./...` clean; `go test ./...` passed; `cd frontend; npm run test` passed (2 files, 4 tests); `cd frontend; npm run build` passed (`tsc --noEmit` and Vite production build).
+- **Files:** `app_test.go`, `frontend/package.json`, `frontend/package-lock.json`, `frontend/vite.config.ts`, `frontend/src/{services/appInfo.ts,services/appInfo.test.ts,utils/errors.ts,components/BackendStatus.test.tsx}`, `README.md`.
+
+### P2-001: Select and integrate an SQLite driver
+- **Completed:** 2026-10-19
+- **Summary:** Selected `modernc.org/sqlite` v1.60.1, a pure-Go `database/sql` driver, to avoid a separate C toolchain requirement for Windows builds. Added `internal/storage.OpenSQLite` and a test that opens an in-memory database and queries the SQLite version. Documented the decision and tradeoffs in ADR 0002 and updated the database design.
+- **Validation:** `go test ./...` and `go vet ./...` passed; a Windows/amd64 production-tag build succeeded with `CGO_ENABLED=0`.
+- **Files:** `go.mod`, `go.sum`, `internal/storage/{sqlite.go,sqlite_test.go}`, `ai/decisions/{0002-use-pure-go-sqlite-driver.md,README.md,0001-use-wails-go-react-sqlite.md}`, `docs/02-design/database-design.md`.
+
+### P2-002: Database initialization and schema migrations
+- **Completed:** 2026-10-24
+- **Summary:** Added app-data database initialization under the user's config directory, SQLite foreign-key/busy-timeout/WAL settings, embedded versioned migrations with transactional application and migration history, and the initial subjects/notes/study sessions/settings schema. Wails startup initializes the database, reports initialization failures through the backend status method, and closes the handle on shutdown.
+- **Validation:** `go test ./...`, `go vet ./...`, `go build ./...`, and `git diff --check` passed.
+- **Files:** `app.go`, `main.go`, `migrations/{embed.go,0001_init.sql,README.md}`, `internal/storage/{sqlite.go,sqlite_test.go,README.md}`, `docs/02-design/database-design.md`.
+
+### P2-003: Persistence and storage tests
+- **Completed:** 2026-10-24
+- **Summary:** Expanded SQLite integration coverage to verify subjects, notes, study sessions, and settings persist after closing and reopening a file database. Added checks for unique names, valid session kinds and durations, foreign-key enforcement and `ON DELETE SET NULL`, plus transactional rollback when a migration fails.
+- **Validation:** `go test ./...`, `go vet ./...`, `go build ./...`, and `git diff --check` passed.
+- **Files:** `internal/storage/sqlite_test.go`, `docs/04-testing/testing-strategy.md`.
+
+### P3-001: Note model and storage interface
+- **Completed:** 2026-10-24
+- **Summary:** Added the notes domain `Note` type with optional subject and timestamps, validation for non-blank titles, `ErrInvalidNote` and `ErrNotFound` sentinels, and a context-aware repository contract for create/read/update/delete/list operations. Documented repository semantics and added validation tests.
+- **Validation:** `go test ./...`, `go vet ./...`, `go build ./...`, and `git diff --check` passed.
+- **Files:** `internal/notes/{note.go,repository.go,note_test.go,README.md}`.
+
+### P3-002: Notes CRUD
+- **Completed:** 2026-10-24
+- **Summary:** Implemented the SQLite note repository for create, get, update, delete, and recently-updated list operations, including timestamp handling and not-found/validation errors. Exposed corresponding operations through the Wails-bound `App` and added repository and app-adapter CRUD tests.
+- **Validation:** `go test ./...`, `go vet ./...`, `go build ./...`, `wails build` (including bound note model/binding generation), and `git diff --check` passed.
+- **Files:** `app.go`, `app_test.go`, `internal/notes/{note.go,README.md}`, `internal/storage/{note_repository.go,note_repository_test.go,README.md}`.
+
+### P3-003: Notes list and editor UI
+- **Completed:** 2026-10-24
+- **Summary:** Added the Notes page with a recent-first note list, selection, new-note editor, explicit create/update actions, confirmed deletion, and unsaved-change protection. Added a typed frontend service over Wails bindings, loading/error/success states, and service/page tests; connected Notes navigation and updated dashboard copy.
+- **Validation:** `frontend: npm run test` (4 files, 10 tests), `frontend: npm run build`, `wails build`, and `git diff --check` passed.
+- **Files:** `frontend/src/{App.tsx,pages/{NotesPage.tsx,NotesPage.test.tsx,DashboardPage.tsx,README.md},services/{notes.ts,notes.test.ts,README.md}}`.
+
+### P3-004: Autosave and save-state indicators
+- **Completed:** 2026-10-24
+- **Summary:** Added 700 ms debounced autosave for titled note drafts, immediate manual save, and visible unsaved/saving/saved/error states. Failed saves remain visible and do not retry repeatedly; another edit or manual save retries. Inputs are locked while a save is in flight to prevent races.
+- **Validation:** `frontend: npm run test` (4 files, 13 tests), `frontend: npm run build`, and `git diff --check` passed.
+- **Files:** `frontend/src/pages/{NotesPage.tsx,NotesPage.test.tsx,README.md}`.
+
+### P3-005: Search, tags, organization
+- **Completed:** 2026-10-24
+- **Summary:** Added case-insensitive title/body search and subject filtering to the notes list. Implemented subject validation, create/list persistence, Wails methods and typed frontend service; notes can be assigned or unassigned from a subject, with subject names displayed in the list. Reused the existing subjects schema and added backend, app, frontend service and UI coverage.
+- **Validation:** `go test ./...`, `go vet ./...`, `go build ./...`, `frontend: npm run test` (4 files, 16 tests), `frontend: npm run build`, `wails build`, and `git diff --check` passed.
+- **Files:** `app.go`, `app_test.go`, `internal/notes/{note.go,repository.go,note_test.go,README.md}`, `internal/storage/{note_repository.go,note_repository_test.go,README.md}`, `frontend/src/{pages/{NotesPage.tsx,NotesPage.test.tsx,README.md},services/{notes.ts,notes.test.ts,README.md}}`.
+
+### P3-006: Notes tests and validation
+- **Completed:** 2026-10-24
+- **Summary:** Completed feature-level validation across the Go domain/storage/app layers and frontend service/page. Added regression coverage for subject creation and deletion failures being surfaced in the UI.
+- **Validation:** `go test ./... -count=1`, `go vet ./...`, `go build ./...`, `frontend: npm run test` (4 files, 17 tests), `frontend: npm run build`, and `git diff --check` passed.
+- **Files:** `frontend/src/pages/NotesPage.test.tsx`, `ai/PROJECT_STATUS.md`.
+
+### P4-001: Timer state and timing rules
+- **Completed:** 2026-10-24
+- **Summary:** Added Wails-independent Pomodoro and stopwatch state logic with an injected clock, validated configurable durations, default 25/5/15-minute phases, pause/resume/reset transitions, completion snapshots, and explicit phase advancement with a long break every fourth completed focus phase.
+- **Validation:** `go test ./... -count=1`, `go vet ./...`, `go build ./...`, and `git diff --check` passed.
+- **Files:** `internal/timer/{timer.go,timer_test.go,README.md}`.
+
+### P4-002: Pomodoro countdown, pause, resume, reset, completion
+- **Completed:** 2026-10-24
+- **Summary:** Initialized a default Pomodoro timer on app startup and exposed state snapshots plus start, pause, resume, reset, and phase-advance Wails methods. Snapshots provide phase/status and duration, elapsed, and remaining time in milliseconds; completion is reflected when state is polled.
+- **Validation:** `go test ./... -count=1`, `go vet ./...`, `go build ./...`, `wails build` (including generated Pomodoro bindings), and `git diff --check` passed.
+- **Files:** `app.go`, `app_test.go`, `frontend/wailsjs/go/main/App.d.ts` (generated/ignored), `ai/PROJECT_STATUS.md`.
+
+### P4-005: Notifications and configurable durations
+- **Completed:** 2026-10-24
+- **Summary:** Persisted validated Pomodoro durations and notification preference in the existing settings table; exposed settings through Wails and added a Settings screen. Duration changes require an idle timer. An app-level monitor detects phase completion regardless of the selected page, shows an in-app alert, and uses OS notifications when enabled and permitted.
+- **Validation:** `go test ./...`, `go vet ./...`, `go build ./...`, `wails build`, `frontend: npm run test` (9 files, 29 tests), `frontend: npm run build`, and `git diff --check` passed.
+- **Files:** `app.go`, `app_test.go`, `internal/{settings,storage,timer}`, `frontend/src/{App.tsx,components/PomodoroNotificationMonitor.tsx,pages/SettingsPage.tsx,services/settings.ts}`, `ai/PROJECT_STATUS.md`.
+
+### P4-006: App restart, sleep, timing accuracy
+- **Completed:** 2026-10-24
+- **Summary:** Added durable snapshots for running, paused, idle, and completed timer state using the existing settings table. App startup restores Pomodoro and stopwatch state, and wall-clock timestamps ensure elapsed time includes system sleep and time while the app is closed. Timer control changes roll back in-memory state if persistence fails.
+- **Validation:** `go test ./... -count=1`, `go vet ./...`, `go build ./...`, `frontend: npm run test`, `frontend: npm run build`, `wails build`, and `git diff --check` passed.
+- **Files:** `app.go`, `app_test.go`, `internal/timer/{timer.go,repository.go,timer_test.go,README.md}`, `internal/storage/{timer_state_repository.go,timer_state_repository_test.go,README.md}`, `docs/04-testing/testing-strategy.md`, `ai/PROJECT_STATUS.md`.
+
+### P4-007: Timer tests and validation
+- **Completed:** 2026-10-24
+- **Summary:** Expanded timer domain and UI coverage for exact deadlines, paused/resumed/reset interactions, persisted-state restoration, corrupt snapshot rejection, and time across restart/sleep. Tightened snapshot validation so idle timers cannot restore with elapsed time.
+- **Validation:** `go test ./... -count=1`, `go test ./internal/timer -cover` (91.7%), `go test -race ./internal/timer ./internal/storage`, `go vet ./...`, `go build ./...`, `frontend: npm run test` (9 files, 32 tests), `frontend: npm run build`, `wails build`, and `git diff --check` passed.
+- **Files:** `internal/timer/{timer.go,timer_test.go,README.md}`, `frontend/src/pages/TimerPage.test.tsx`, `docs/04-testing/testing-strategy.md`, `ai/PROJECT_STATUS.md`.
+
+### P5-001: Session model and persistence
+- **Completed:** 2026-10-24
+- **Summary:** Added a Wails-independent study session model with kinds, optional subject/note, start/end timestamps, whole-second duration, and validation. Implemented SQLite create, get-by-ID, and newest-first list operations using the existing sessions table, including optional-subject foreign-key behavior and persistence across database reopen.
+- **Validation:** `go test ./... -count=1`, `go test -race ./internal/study ./internal/storage`, `go vet ./...`, `go build ./...`, and `git diff --check` passed.
+- **Files:** `internal/study/{session.go,repository.go,session_test.go,README.md}`, `internal/storage/{session_repository.go,session_repository_test.go,README.md}`, `docs/02-design/database-design.md`, `ai/PROJECT_STATUS.md`.
+
+### P5-002: Record completed sessions
+- **Completed:** 2026-10-24
+- **Summary:** Automatically records Pomodoro focus sessions when the phase reaches completion and stopwatch sessions when the stopwatch is reset after use. Records use timer start/end timestamps and active elapsed duration; stable unique completion keys make retries safe across polling and restarts.
+- **Validation:** `go test ./... -count=1`, `go test -race ./internal/study ./internal/storage ./internal/timer`, `go vet ./...`, `go build ./...`, and `git diff --check` passed.
+- **Files:** `app.go`, `app_test.go`, `internal/{study,storage}`, `internal/timer/timer.go`, `migrations/0002_study_session_completion_key.sql`, `docs/02-design/database-design.md`, `ai/PROJECT_STATUS.md`.
+
+### P5-003: Basic statistics
+- **Completed:** 2026-10-24
+- **Summary:** Added persisted-session aggregates for today's and this week's active duration, all-time duration, and all-time duration by subject (including unassigned sessions). Day and week windows use the computer's local timezone, include sessions by start time through the current time, and use Monday as the first day of the week. Added a refreshable Statistics page with loading, empty, and error states.
+- **Validation:** `go test ./... -count=1`, `go test -race ./internal/study ./internal/storage`, `go vet ./...`, `go build ./...`, `frontend: npm run test`, `frontend: npm run build`, `wails build`, and `git diff --check` passed.
+- **Files:** `app.go`, `app_test.go`, `internal/{study,storage}`, `frontend/src/{App.tsx,pages/StatisticsPage.tsx,services/statistics.ts}`, `docs/01-requirements/functional-requirements.md`, `ai/PROJECT_STATUS.md`.
+
+### P5-004: Session history and tests
+- **Completed:** 2026-10-24
+- **Summary:** Exposed persisted sessions through Wails and added a Session History page with local-date grouping and inclusive date, session-type, and subject filters. Each record shows its type, local start/end times, active duration, subject, and optional note; loading, empty, stale-data, and error states are covered.
+- **Validation:** `go test ./... -count=1`, `go test -race ./internal/storage ./internal/study`, `go vet ./...`, `go build ./...`, `frontend: npm run test` (13 files, 41 tests), `frontend: npm run build`, `wails build`, and `git diff --check` passed.
+- **Files:** `app.go`, `app_test.go`, `frontend/src/{App.tsx,types/navigation.ts,pages/SessionHistoryPage.tsx,pages/SessionHistoryPage.test.tsx,services/sessions.ts,services/sessions.test.ts}`, `ai/PROJECT_STATUS.md`.
+
+### P6-001: Settings and theme preferences
+- **Completed:** 2026-10-24
+- **Summary:** Added persisted system/light/dark theme preference using the existing settings table and exposed it through Wails. Settings now provides a theme selector alongside Pomodoro durations and notification preferences; light/system themes adapt app surfaces, text, and form controls to the selected/OS theme. Dark remains the default to preserve the existing appearance.
+- **Validation:** `go test ./... -count=1`, `go vet ./...`, `frontend: npm run test` (13 files, 44 tests), `frontend: npm run build`, Wails binding generation, and `git diff --check` passed. Rendered UI was not visually inspected.
+- **Files:** `app.go`, `app_test.go`, `internal/settings/{settings.go,repository.go,settings_test.go,README.md}`, `internal/storage/settings_repository{.go,_test.go}`, `frontend/src/{App.tsx,index.css,pages/SettingsPage.tsx,pages/SettingsPage.test.tsx,services/settings.ts,services/settings.test.ts,services/README.md}`, `ai/PROJECT_STATUS.md`.
+
+### P6-002: Error handling and UX improvements
+- **Completed:** 2026-10-24
+- **Summary:** Added explicit Notes loading failure state and retry, prevented load failures from appearing as an empty library, and disabled note editing/creation until the list loads successfully. Added independent retry controls for timer settings and theme initialization, and show concurrent startup/notification errors separately rather than masking all but the first. Protected note reloads from stale overlapping requests.
+- **Validation:** `frontend: npm run test` (14 files, 46 tests), `frontend: npm run build`, and `git diff --check` passed.
+- **Files:** `frontend/src/{App.tsx,App.test.tsx,pages/NotesPage.tsx,pages/NotesPage.test.tsx}`, `ai/PROJECT_STATUS.md`.
+
+### P6-003: Integration and regression testing
+- **Completed:** 2026-10-24
+- **Summary:** Added an App-level integration regression covering the actual sidebar-to-Settings navigation path, loading the persisted theme, saving a new selection through the settings service, and applying it to the document root. Existing App startup retry tests continue to verify independent preference failures and recovery.
+- **Validation:** `go test ./... -count=1`, `go test -race ./...`, `go vet ./...`, `go build ./...`, `frontend: npm run test` (14 files, 47 tests), `frontend: npm run build`, and `git diff --check` passed.
+- **Files:** `frontend/src/App.test.tsx`, `ai/PROJECT_STATUS.md`.
+
+### P6-004: Windows production builds
+- **Completed:** 2026-10-24
+- **Summary:** Ran the Wails production build for `windows/amd64`. Wails generated bindings, installed frontend dependencies, compiled the frontend and application assets, and produced the packaged executable at `build/bin/studydesk.exe` (16,244,224 bytes). The output directory and packaging settings preserve existing files; no installer is configured.
+- **Validation:** `wails build` succeeded; verified the executable exists and is non-empty; `git diff --check` passed. The executable was not launched as part of this build check.
+- **Files:** `build/bin/studydesk.exe` (generated, git-ignored), `ai/PROJECT_STATUS.md`.
+
+### P6-005: Install, backup, and release documentation
+- **Completed:** 2026-10-24
+- **Summary:** Documented portable Windows installation and WebView2 prerequisite, build/release steps, SHA-256 checksum generation, local `%APPDATA%\StudyDesk\studydesk.db` contents, and PowerShell ZIP backup/restore procedures that require closing the app and preserve pre-restore data. Updated README and project overview to reflect implemented features and current installer/signing limitations.
+- **Validation:** Manually checked paths and commands against `OpenAppDatabase`, `wails.json`, and the successful Windows production build; `git diff --check` passed. Documentation examples were not executed on a separate end-user machine.
+- **Files:** `README.md`, `docs/05-release/install-backup.md`, `docs/03-development/setup.md`, `docs/00-project-context/project-overview.md`, `docs/02-design/folder-structure.md`, `ai/PROJECT_STATUS.md`.
+
+### P6-006: Windows installer packaging and verification
+- **Status:** IN_PROGRESS
+- **Summary:** Added an Inno Setup installer for a per-machine Program Files install, Start Menu shortcut, optional Desktop shortcut, Windows uninstall registration, and WebView2 Evergreen bootstrapper. Added a PowerShell release pipeline that reads the sole version source (`appVersion` in `app.go`), builds/tests the app, verifies the Microsoft bootstrapper signature, compiles setup, creates a ZIP containing only that installer, and replaces only same-version release outputs. Added a tracked `release/` README; generated EXE/ZIP artifacts are ignored. No StudyDesk-branded icon is available; the existing appicon is Wails branding and is not used for installer branding.
+- **Environment:** Windows/amd64, Go 1.27.2, Wails CLI v2.17.0, Node.js 22.20.0, npm 10.9.3. Inno Setup 6 (`ISCC.exe`) is not installed.
+- **Validation:** `wails build` succeeded; Go tests passed; frontend tests passed (14 files, 47 tests) and production build passed; release script parsed and extracted version `0.1.0`; Microsoft bootstrapper download verified at 1,876,736 bytes with a valid Microsoft Corporation Authenticode signature; script correctly stops before building when Inno Setup is missing; `git diff --check` passed. Installer compilation, ZIP extraction of a real installer, clean-machine install/launch/shortcut/uninstall/data-retention tests remain BLOCKED because Inno Setup and an isolated Windows test machine are unavailable.
+- **Files:** `.gitignore`, `build/windows/installer.iss`, `build-tools/{README.md,release-windows.ps1}`, `release/README.md`, `README.md`, `docs/{00-project-context/project-overview.md,02-design/folder-structure.md,03-development/setup.md,05-release/install-backup.md}`, `ai/PROJECT_STATUS.md`.
+
+## D. Current Task
+
+P6-006 is partially implemented; installer creation and clean-machine verification require Inno Setup and a test machine.
+
+## E. Remaining Tasks and Roadmap
+
+Statuses: NOT_STARTED unless noted. P1-001 through P1-005, P2-001 through P2-003, P3-001 through P3-006, P4-001 through P4-007, P5-001 through P5-004, and P6-001 through P6-005 are complete. P6-006 is in progress.
+
+**Phase 1 — Foundation**
+- P1-004: DONE (see C).
+- P1-005: DONE (see C).
+
+**Phase 2 — Local Storage**
+- P2-001: DONE (see C).
+- P2-002: DONE (see C).
+- P2-003: DONE (see C).
+
+**Phase 3 — Notes**
+- P3-001: DONE (see C).
+- P3-002: DONE (see C).
+- P3-003: DONE (see C).
+- P3-004: DONE (see C).
+- P3-005: DONE (see C).
+- P3-006: DONE (see C).
+
+**Phase 4 — Timer and Stopwatch**
+- P4-001: DONE (see C).
+- P4-002: DONE (see C).
+- P4-003: DONE — Stopwatch controls and state exposed through Wails. (see C)
+- P4-004: DONE — Pomodoro and stopwatch UI with Wails controls and live snapshots. (see C)
+- P4-005: DONE — Notifications and configurable durations. (see C)
+- P4-006: DONE — App restart, sleep, timing accuracy. (see C)
+- P4-007: DONE — Timer tests and validation. (see C)
+
+**Phase 5 — Study Tracking**
+- P5-001: DONE — Session model and persistence. (see C)
+- P5-002: DONE — Record completed sessions. (see C)
+- P5-003: DONE — Basic statistics. (see C)
+- P5-004: DONE — Session history and tests. (see C)
+
+**Phase 6 — Polish and Release**
+- P6-001: DONE — Settings and theme preferences (see C).
+- P6-002: DONE — Error handling and UX improvements (see C).
+- P6-003: DONE — Integration and regression testing (see C).
+- P6-004: DONE — Windows production builds (see C).
+- P6-005: DONE — Install, backup, and release documentation (see C).
+- P6-006: IN_PROGRESS — Windows installer packaging and verification.
+
+## F. Known Issues and Technical Decisions
+
+- `frontend/wailsjs/` is git-ignored and generated; a fresh clone needs `wails dev`, `wails build`, or `wails generate module` before `npm run build` can type-check `services/appInfo.ts`.
+- `build/` now contains CLI-generated icon and Windows manifest (previously missing).
+- `frontend/package.json.md5` is a Wails artifact and is git-ignored.
+- Automated coverage includes SQLite persistence, note CRUD, frontend service wrappers/pages, and App-level preference/navigation and recovery flows. Visual/manual desktop smoke checks remain outstanding.
+- Rendered UI has not been visually verified.
+- Root `package.json` is a minimal stub with `wails` scripts only.
+- SQLite uses `modernc.org/sqlite`, a pure-Go driver (see [ADR 0002](decisions/0002-use-pure-go-sqlite-driver.md)).
+- Decisions: [ADR 0001](decisions/0001-use-wails-go-react-sqlite.md), [ADR 0002](decisions/0002-use-pure-go-sqlite-driver.md). The Go package at the repo root is `main` (Wails convention).
+- Deferred: client-side routing library (simple state-based navigation for now).
+
+## G. Next Recommended Task
+
+**P6-006: Windows installer packaging and verification.**
+
+- **Why next:** Produce and test the user-downloadable setup installer and ZIP.
+- **Prerequisites:** Install Inno Setup 6 (`ISCC.exe`) and provide an isolated Windows 10/11 test machine/VM.
+- **Acceptance:** Run `.\build-tools\release-windows.ps1`; verify installer and ZIP contents, clean install and app launch, Start Menu/optional Desktop shortcuts, Windows uninstall registration, and retention of `%APPDATA%\StudyDesk\studydesk.db` after uninstall.
+
+## H. Instructions for Future AI Sessions
+
+1. Read this file before starting any task.
+2. Inspect the current code and Git status before making changes.
+3. Verify the status of the selected task rather than trusting an outdated report.
+4. Work only on the requested task and its necessary dependencies.
+5. Do not mark tasks complete without validation.
+6. Update this file at the end of every task.
+7. Record test failures and blocked work honestly.
+8. Keep the roadmap and next recommended task synchronized.
+9. Never overwrite previous task history without a clear reason.
+10. If the current repository contradicts this file, investigate and reconcile the discrepancy.

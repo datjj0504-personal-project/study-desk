@@ -1,0 +1,30 @@
+import { BackendStatus } from "../components/BackendStatus";
+import { PlaceholderCard } from "../components/PlaceholderCard";
+
+export function DashboardPage() {
+  return (
+    <div>
+      <h1 className="text-2xl font-semibold">Welcome to StudyDesk</h1>
+      <p className="mt-1 text-slate-400">
+        Your personal study companion. Open Study Statistics to review your study time.
+      </p>
+      <div className="mt-2">
+        <BackendStatus />
+      </div>
+      <div className="mt-6 grid grid-cols-1 gap-4 xl:grid-cols-3">
+        <PlaceholderCard
+          title="Recent Notes"
+          message="Open Notes from the sidebar to create and edit your study notes."
+        />
+        <PlaceholderCard
+          title="Focus Timer"
+          message="Open Focus Timer from the sidebar to start a focused session."
+        />
+        <PlaceholderCard
+          title="Study Statistics"
+          message="View your daily, weekly, all-time, and per-subject study durations."
+        />
+      </div>
+    </div>
+  );
+}

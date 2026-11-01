@@ -1,0 +1,487 @@
+package timer
+
+import (
+	"errors"
+	"testing"
+	"time"
+)
+
+type fakeClock struct {
+	now time.Time
+}
+
+func (c *fakeClock) Now() time.Time {
+	return c.now
+}
+
+func (c *fakeClock) Advance(duration time.Duration) {
+	c.now = c.now.Add(duration)
+}
+
+func TestNewPomodoroValidatesConfiguration(t *testing.T) {
+	tests := []struct {
+		name      string
+		clock     Clock
+		durations Durations
+	}{
+		{name: "missing clock", durations: DefaultDurations()},
+		{name: "zero focus duration", clock: &fakeClock{}, durations: Durations{ShortBreak: time.Minute, LongBreak: time.Minute, LongBreakEvery: 4}},
+		{name: "zero break duration", clock: &fakeClock{}, durations: Durations{Focus: time.Minute, LongBreak: time.Minute, LongBreakEvery: 4}},
+		{name: "zero long break interval", clock: &fakeClock{}, durations: Durations{Focus: time.Minute, ShortBreak: time.Minute, LongBreak: time.Minute}},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if _, err := NewPomodoro(test.clock, test.durations); !errors.Is(err, ErrInvalidConfiguration) {
+				t.Errorf("NewPomodoro() error = %v, want %v", err, ErrInvalidConfiguration)
+			}
+		})
+	}
+}
+
+func TestNewStopwatchValidatesClock(t *testing.T) {
+	if _, err := NewStopwatch(nil); !errors.Is(err, ErrInvalidConfiguration) {
+		t.Errorf("NewStopwatch(nil) error = %v, want %v", err, ErrInvalidConfiguration)
+	}
+}
+
+func TestPomodoroPauseResumeAndCompletion(t *testing.T) {
+	clock := &fakeClock{now: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)}
+	durations := Durations{Focus: 10 * time.Minute, ShortBreak: 3 * time.Minute, LongBreak: 7 * time.Minute, LongBreakEvery: 4}
+	timer, err := NewPomodoro(clock, durations)
+	if err != nil {
+		t.Fatalf("NewPomodoro() returned an error: %v", err)
+	}
+
+	initial := timer.State()
+	if initial.Status != StatusIdle || initial.Phase != PhaseFocus || initial.Remaining != durations.Focus {
+		t.Fatalf("initial State() = %+v", initial)
+	}
+	if err := timer.Start(); err != nil {
+		t.Fatalf("Start() returned an error: %v", err)
+	}
+	clock.Advance(4 * time.Minute)
+	if err := timer.Pause(); err != nil {
+		t.Fatalf("Pause() returned an error: %v", err)
+	}
+	paused := timer.State()
+	if paused.Status != StatusPaused || paused.Elapsed != 4*time.Minute || paused.Remaining != 6*time.Minute {
+		t.Errorf("paused State() = %+v", paused)
+	}
+
+	clock.Advance(30 * time.Minute)
+	if got := timer.State().Remaining; got != 6*time.Minute {
+		t.Errorf("paused remaining after clock advance = %v, want 6m", got)
+	}
+	if err := timer.Resume(); err != nil {
+		t.Fatalf("Resume() returned an error: %v", err)
+	}
+	clock.Advance(6 * time.Minute)
+	completed := timer.State()
+	if completed.Status != StatusCompleted || completed.Elapsed != durations.Focus || completed.Remaining != 0 {
+		t.Errorf("completed State() = %+v", completed)
+	}
+}
+
+func TestPomodoroUsesDefaultDurations(t *testing.T) {
+	timer, err := NewPomodoro(&fakeClock{}, DefaultDurations())
+	if err != nil {
+		t.Fatalf("NewPomodoro() returned an error: %v", err)
+	}
+	state := timer.State()
+	if state.Duration != 25*time.Minute || state.Remaining != 25*time.Minute {
+		t.Errorf("default focus state = %+v, want 25 minutes", state)
+	}
+}
+
+func TestPomodoroCompletesAtExactDeadline(t *testing.T) {
+	tests := []struct {
+		name       string
+		advance    time.Duration
+		wantStatus Status
+		wantRemain time.Duration
+	}{
+		{name: "just before deadline", advance: time.Minute - time.Nanosecond, wantStatus: StatusRunning, wantRemain: time.Nanosecond},
+		{name: "at deadline", advance: time.Minute, wantStatus: StatusCompleted},
+		{name: "after deadline", advance: time.Minute + time.Hour, wantStatus: StatusCompleted},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			clock := &fakeClock{now: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)}
+			pomodoro, err := NewPomodoro(clock, Durations{
+				Focus: time.Minute, ShortBreak: time.Minute, LongBreak: time.Minute, LongBreakEvery: 4,
+			})
+			if err != nil {
+				t.Fatalf("NewPomodoro() returned an error: %v", err)
+			}
+			if err := pomodoro.Start(); err != nil {
+				t.Fatalf("Start() returned an error: %v", err)
+			}
+			clock.Advance(test.advance)
+			state := pomodoro.State()
+			if state.Status != test.wantStatus || state.Remaining != test.wantRemain {
+				t.Errorf("State() = %+v, want status %s and remaining %s", state, test.wantStatus, test.wantRemain)
+			}
+			if state.Elapsed > state.Duration {
+				t.Errorf("elapsed %s exceeded duration %s", state.Elapsed, state.Duration)
+			}
+		})
+	}
+}
+
+func TestPomodoroConfigureRequiresIdleAndResetsCycle(t *testing.T) {
+	clock := &fakeClock{now: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)}
+	pomodoro, err := NewPomodoro(clock, DefaultDurations())
+	if err != nil {
+		t.Fatalf("NewPomodoro() returned an error: %v", err)
+	}
+	durations := Durations{Focus: 10 * time.Minute, ShortBreak: 2 * time.Minute, LongBreak: 5 * time.Minute, LongBreakEvery: 3}
+
+	if err := pomodoro.Start(); err != nil {
+		t.Fatalf("Start() returned an error: %v", err)
+	}
+	if err := pomodoro.Configure(durations); !errors.Is(err, ErrInvalidTransition) {
+		t.Fatalf("Configure() while running error = %v, want %v", err, ErrInvalidTransition)
+	}
+	pomodoro.Reset()
+	if err := pomodoro.Configure(durations); err != nil {
+		t.Fatalf("Configure() while idle returned an error: %v", err)
+	}
+	state := pomodoro.State()
+	if state.Status != StatusIdle || state.Phase != PhaseFocus || state.Duration != durations.Focus ||
+		state.Elapsed != 0 || state.CompletedFocuses != 0 {
+		t.Errorf("State() after Configure() = %+v", state)
+	}
+}
+
+func TestTimerRestoreCountsTimeAcrossSleepAndRestart(t *testing.T) {
+	clock := &fakeClock{now: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)}
+	durations := Durations{Focus: 10 * time.Minute, ShortBreak: time.Minute, LongBreak: 2 * time.Minute, LongBreakEvery: 4}
+	pomodoro, err := NewPomodoro(clock, durations)
+	if err != nil {
+		t.Fatalf("NewPomodoro() returned an error: %v", err)
+	}
+	stopwatch, err := NewStopwatch(clock)
+	if err != nil {
+		t.Fatalf("NewStopwatch() returned an error: %v", err)
+	}
+	if err := pomodoro.Start(); err != nil {
+		t.Fatalf("Pomodoro Start() returned an error: %v", err)
+	}
+	if err := stopwatch.Start(); err != nil {
+		t.Fatalf("stopwatch Start() returned an error: %v", err)
+	}
+	clock.Advance(3 * time.Minute)
+
+	pomodoroSnapshot := pomodoro.Snapshot()
+	stopwatchSnapshot := stopwatch.Snapshot()
+	wantSessionStart := clock.now.Add(-3 * time.Minute).UnixNano()
+	if pomodoroSnapshot.SessionStartedAtUnixNano != wantSessionStart ||
+		stopwatchSnapshot.SessionStartedAtUnixNano != wantSessionStart {
+		t.Errorf("session start timestamps = %d/%d, want %d", pomodoroSnapshot.SessionStartedAtUnixNano, stopwatchSnapshot.SessionStartedAtUnixNano, wantSessionStart)
+	}
+	restartedClock := &fakeClock{now: clock.now}
+	restartedPomodoro, err := NewPomodoro(restartedClock, durations)
+	if err != nil {
+		t.Fatalf("NewPomodoro() after restart returned an error: %v", err)
+	}
+	restartedStopwatch, err := NewStopwatch(restartedClock)
+	if err != nil {
+		t.Fatalf("NewStopwatch() after restart returned an error: %v", err)
+	}
+	if err := restartedPomodoro.Restore(pomodoroSnapshot); err != nil {
+		t.Fatalf("Restore() Pomodoro returned an error: %v", err)
+	}
+	if err := restartedStopwatch.Restore(stopwatchSnapshot); err != nil {
+		t.Fatalf("Restore() stopwatch returned an error: %v", err)
+	}
+
+	restartedClock.Advance(8 * time.Minute)
+	pomodoroState := restartedPomodoro.State()
+	if pomodoroState.Status != StatusCompleted || pomodoroState.Elapsed != durations.Focus {
+		t.Errorf("Pomodoro state after simulated sleep = %+v, want completed at 10 minutes", pomodoroState)
+	}
+	stopwatchState := restartedStopwatch.State()
+	if stopwatchState.Status != StatusRunning || stopwatchState.Elapsed != 11*time.Minute {
+		t.Errorf("stopwatch state after simulated sleep = %+v, want running at 11 minutes", stopwatchState)
+	}
+}
+
+func TestTimerSessionStartSurvivesPauseAndResume(t *testing.T) {
+	clock := &fakeClock{now: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)}
+	stopwatch, err := NewStopwatch(clock)
+	if err != nil {
+		t.Fatalf("NewStopwatch() returned an error: %v", err)
+	}
+	if err := stopwatch.Start(); err != nil {
+		t.Fatalf("Start() returned an error: %v", err)
+	}
+	startedAt := clock.now.UnixNano()
+	clock.Advance(5 * time.Second)
+	if err := stopwatch.Pause(); err != nil {
+		t.Fatalf("Pause() returned an error: %v", err)
+	}
+	if got := stopwatch.Snapshot().SessionStartedAtUnixNano; got != startedAt {
+		t.Errorf("session start after pause = %d, want %d", got, startedAt)
+	}
+	clock.Advance(time.Minute)
+	if err := stopwatch.Resume(); err != nil {
+		t.Fatalf("Resume() returned an error: %v", err)
+	}
+	if got := stopwatch.Snapshot().SessionStartedAtUnixNano; got != startedAt {
+		t.Errorf("session start after resume = %d, want %d", got, startedAt)
+	}
+}
+
+func TestRestoreDerivesSessionStartFromLegacyRunningSnapshot(t *testing.T) {
+	now := time.Date(2026, 1, 1, 0, 10, 0, 0, time.UTC)
+	clock := &fakeClock{now: now}
+	pomodoro, err := NewPomodoro(clock, Durations{
+		Focus: 25 * time.Minute, ShortBreak: 5 * time.Minute, LongBreak: 15 * time.Minute, LongBreakEvery: 4,
+	})
+	if err != nil {
+		t.Fatalf("NewPomodoro() returned an error: %v", err)
+	}
+	snapshot := Snapshot{
+		Mode: ModePomodoro, Phase: PhaseFocus, Status: StatusRunning,
+		Duration: 25 * time.Minute, Elapsed: 10 * time.Minute,
+		StartedAtUnixNano: now.UnixNano(),
+	}
+	if err := pomodoro.Restore(snapshot); err != nil {
+		t.Fatalf("Restore() legacy snapshot returned an error: %v", err)
+	}
+	got := pomodoro.Snapshot().SessionStartedAtUnixNano
+	want := now.Add(-10 * time.Minute).UnixNano()
+	if got != want {
+		t.Errorf("restored session start = %d, want %d", got, want)
+	}
+}
+
+func TestRestoreRejectsInvalidSnapshots(t *testing.T) {
+	pomodoro, err := NewPomodoro(&fakeClock{}, DefaultDurations())
+	if err != nil {
+		t.Fatalf("NewPomodoro() returned an error: %v", err)
+	}
+	tests := []struct {
+		name     string
+		snapshot Snapshot
+	}{
+		{
+			name: "wrong mode",
+			snapshot: Snapshot{
+				Mode: ModeStopwatch, Phase: PhaseStopwatch, Status: StatusIdle,
+			},
+		},
+		{
+			name: "running without timestamp",
+			snapshot: Snapshot{
+				Mode: ModePomodoro, Phase: PhaseFocus, Status: StatusRunning,
+				Duration: 25 * time.Minute,
+			},
+		},
+		{
+			name: "duration mismatch",
+			snapshot: Snapshot{
+				Mode: ModePomodoro, Phase: PhaseFocus, Status: StatusIdle,
+				Duration: time.Minute,
+			},
+		},
+		{
+			name: "negative elapsed",
+			snapshot: Snapshot{
+				Mode: ModePomodoro, Phase: PhaseFocus, Status: StatusIdle,
+				Duration: 25 * time.Minute, Elapsed: -time.Second,
+			},
+		},
+		{
+			name: "idle with elapsed",
+			snapshot: Snapshot{
+				Mode: ModePomodoro, Phase: PhaseFocus, Status: StatusIdle,
+				Duration: 25 * time.Minute, Elapsed: time.Second,
+			},
+		},
+		{
+			name: "paused at deadline",
+			snapshot: Snapshot{
+				Mode: ModePomodoro, Phase: PhaseFocus, Status: StatusPaused,
+				Duration: 25 * time.Minute, Elapsed: 25 * time.Minute,
+			},
+		},
+		{
+			name: "completed before deadline",
+			snapshot: Snapshot{
+				Mode: ModePomodoro, Phase: PhaseFocus, Status: StatusCompleted,
+				Duration: 25 * time.Minute, Elapsed: 24 * time.Minute,
+			},
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if err := pomodoro.Restore(test.snapshot); !errors.Is(err, ErrInvalidConfiguration) {
+				t.Errorf("Restore() error = %v, want %v", err, ErrInvalidConfiguration)
+			}
+		})
+	}
+}
+
+func TestRestorePreservesPausedAndCompletedSnapshots(t *testing.T) {
+	tests := []struct {
+		name     string
+		snapshot Snapshot
+	}{
+		{
+			name: "paused Pomodoro",
+			snapshot: Snapshot{
+				Mode: ModePomodoro, Phase: PhaseShortBreak, Status: StatusPaused,
+				Duration: 5 * time.Minute, Elapsed: 2 * time.Minute, CompletedFocuses: 1,
+			},
+		},
+		{
+			name: "completed Pomodoro",
+			snapshot: Snapshot{
+				Mode: ModePomodoro, Phase: PhaseFocus, Status: StatusCompleted,
+				Duration: 25 * time.Minute, Elapsed: 25 * time.Minute, CompletedFocuses: 2,
+			},
+		},
+		{
+			name: "paused stopwatch",
+			snapshot: Snapshot{
+				Mode: ModeStopwatch, Phase: PhaseStopwatch, Status: StatusPaused,
+				Elapsed: 7 * time.Minute,
+			},
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			clock := &fakeClock{now: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)}
+			var restored *Timer
+			var err error
+			if test.snapshot.Mode == ModePomodoro {
+				restored, err = NewPomodoro(clock, DefaultDurations())
+			} else {
+				restored, err = NewStopwatch(clock)
+			}
+			if err != nil {
+				t.Fatalf("create timer: %v", err)
+			}
+			if err := restored.Restore(test.snapshot); err != nil {
+				t.Fatalf("Restore() returned an error: %v", err)
+			}
+			state := restored.State()
+			if state.Mode != test.snapshot.Mode || state.Phase != test.snapshot.Phase ||
+				state.Status != test.snapshot.Status || state.Duration != test.snapshot.Duration ||
+				state.Elapsed != test.snapshot.Elapsed || state.CompletedFocuses != test.snapshot.CompletedFocuses {
+				t.Errorf("State() after restore = %+v, want snapshot %+v", state, test.snapshot)
+			}
+		})
+	}
+}
+
+func TestPomodoroPhaseCycle(t *testing.T) {
+	clock := &fakeClock{now: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)}
+	durations := Durations{Focus: time.Minute, ShortBreak: 10 * time.Second, LongBreak: 30 * time.Second, LongBreakEvery: 2}
+	timer, err := NewPomodoro(clock, durations)
+	if err != nil {
+		t.Fatalf("NewPomodoro() returned an error: %v", err)
+	}
+
+	completePhase := func(wantPhase Phase, wantCompleted int) {
+		t.Helper()
+		if err := timer.Start(); err != nil {
+			t.Fatalf("Start() returned an error: %v", err)
+		}
+		clock.Advance(timer.State().Remaining)
+		state := timer.State()
+		if state.Status != StatusCompleted {
+			t.Fatalf("phase did not complete: %+v", state)
+		}
+		if err := timer.Advance(); err != nil {
+			t.Fatalf("Advance() returned an error: %v", err)
+		}
+		state = timer.State()
+		if state.Phase != wantPhase || state.CompletedFocuses != wantCompleted || state.Status != StatusIdle {
+			t.Errorf("state after advance = %+v, want phase %s and %d completed focuses", state, wantPhase, wantCompleted)
+		}
+	}
+
+	completePhase(PhaseShortBreak, 1)
+	completePhase(PhaseFocus, 1)
+	completePhase(PhaseLongBreak, 2)
+}
+
+func TestStopwatchPauseResumeAndReset(t *testing.T) {
+	clock := &fakeClock{now: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)}
+	timer, err := NewStopwatch(clock)
+	if err != nil {
+		t.Fatalf("NewStopwatch() returned an error: %v", err)
+	}
+	if err := timer.Start(); err != nil {
+		t.Fatalf("Start() returned an error: %v", err)
+	}
+	clock.Advance(5 * time.Second)
+	if err := timer.Pause(); err != nil {
+		t.Fatalf("Pause() returned an error: %v", err)
+	}
+	if state := timer.State(); state.Elapsed != 5*time.Second || state.Status != StatusPaused {
+		t.Errorf("paused stopwatch State() = %+v", state)
+	}
+
+	clock.Advance(time.Hour)
+	if state := timer.State(); state.Elapsed != 5*time.Second {
+		t.Errorf("paused stopwatch elapsed after clock advance = %v, want 5s", state.Elapsed)
+	}
+	if err := timer.Resume(); err != nil {
+		t.Fatalf("Resume() returned an error: %v", err)
+	}
+	clock.Advance(2 * time.Second)
+	if state := timer.State(); state.Elapsed != 7*time.Second || state.Status != StatusRunning {
+		t.Errorf("resumed stopwatch State() = %+v", state)
+	}
+
+	timer.Reset()
+	if state := timer.State(); state.Status != StatusIdle || state.Elapsed != 0 || state.Phase != PhaseStopwatch {
+		t.Errorf("reset stopwatch State() = %+v", state)
+	}
+}
+
+func TestInvalidTransitionsAndReset(t *testing.T) {
+	clock := &fakeClock{now: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)}
+	timer, err := NewPomodoro(clock, Durations{Focus: time.Minute, ShortBreak: time.Minute, LongBreak: time.Minute, LongBreakEvery: 4})
+	if err != nil {
+		t.Fatalf("NewPomodoro() returned an error: %v", err)
+	}
+
+	if err := timer.Pause(); !errors.Is(err, ErrInvalidTransition) {
+		t.Errorf("Pause() while idle error = %v, want %v", err, ErrInvalidTransition)
+	}
+	if err := timer.Resume(); !errors.Is(err, ErrInvalidTransition) {
+		t.Errorf("Resume() while idle error = %v, want %v", err, ErrInvalidTransition)
+	}
+	if err := timer.Advance(); !errors.Is(err, ErrInvalidTransition) {
+		t.Errorf("Advance() while idle error = %v, want %v", err, ErrInvalidTransition)
+	}
+
+	if err := timer.Start(); err != nil {
+		t.Fatalf("Start() returned an error: %v", err)
+	}
+	clock.Advance(10 * time.Second)
+	timer.Reset()
+	state := timer.State()
+	if state.Status != StatusIdle || state.Phase != PhaseFocus || state.Elapsed != 0 || state.Remaining != time.Minute {
+		t.Errorf("reset Pomodoro State() = %+v", state)
+	}
+}
+
+func TestClockMovingBackwardDoesNotReduceElapsedBelowZero(t *testing.T) {
+	clock := &fakeClock{now: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)}
+	timer, err := NewStopwatch(clock)
+	if err != nil {
+		t.Fatalf("NewStopwatch() returned an error: %v", err)
+	}
+	if err := timer.Start(); err != nil {
+		t.Fatalf("Start() returned an error: %v", err)
+	}
+	clock.Advance(-time.Second)
+	if state := timer.State(); state.Elapsed != 0 {
+		t.Errorf("elapsed after clock moved backward = %v, want 0", state.Elapsed)
+	}
+}
